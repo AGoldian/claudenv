@@ -1,10 +1,10 @@
 {
-  "name": "create-project-docs",
-  "version": "1.0.0",
+  "name": "claudenv",
+  "version": "1.0.1",
   "description": "One command to set up Claude Code documentation for any project — detects tech stack, generates CLAUDE.md, rules, hooks, commands, and skills",
   "type": "module",
   "bin": {
-    "create-project-docs": "./bin/cli.js"
+    "claudenv": "./bin/cli.js"
   },
   "main": "./src/index.js",
   "exports": {

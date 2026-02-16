@@ -1,12 +1,29 @@
-# create-project-docs
+# claudenv
 
 One command to set up [Claude Code](https://docs.anthropic.com/en/docs/claude-code) documentation for any project.
+
+## Installation
+
+Run directly without installing — pick your package manager:
+
+```bash
+npx claudenv          # npm
+pnpm dlx claudenv     # pnpm
+bunx claudenv         # bun
+yarn dlx claudenv     # yarn
+```
+
+Or install globally:
+
+```bash
+npm i -g claudenv
+```
 
 ## Quick start
 
 ```bash
 cd your-project
-npx create-project-docs
+npx claudenv
 ```
 
 Scans your project, detects the tech stack, asks a few questions, and generates everything Claude Code needs to understand your codebase.
@@ -14,8 +31,22 @@ Scans your project, detects the tech stack, asks a few questions, and generates 
 Skip the questions with `-y`:
 
 ```bash
-npx create-project-docs -y
+npx claudenv -y
 ```
+
+## Usage in Claude Code
+
+### Option A: Global install + shell command
+
+```bash
+npm i -g claudenv
+# Then inside Claude Code, just run:
+claudenv
+```
+
+### Option B: Slash command (auto-installed)
+
+After running `claudenv` in your project, the `.claude/commands/init-docs.md` file is created. This gives you the `/init-docs` slash command inside Claude Code, which does the same thing — analyzes the project and generates documentation.
 
 ## What gets generated
 
@@ -78,7 +109,7 @@ The `doc-generator` skill auto-triggers when Claude detects your docs are outdat
 ## CLI reference
 
 ```
-Usage: create-project-docs [dir] [options]
+Usage: claudenv [dir] [options]
 
 Options:
   -y, --yes        Skip prompts, use auto-detected defaults
@@ -101,13 +132,13 @@ npm install
 npm link
 
 # Then in any project:
-create-project-docs
+claudenv
 ```
 
 ## Programmatic API
 
 ```javascript
-import { detectTechStack, generateDocs, writeDocs, installScaffold } from 'create-project-docs';
+import { detectTechStack, generateDocs, writeDocs, installScaffold } from 'claudenv';
 
 const detected = await detectTechStack('/path/to/project');
 const { files } = await generateDocs('/path/to/project', {

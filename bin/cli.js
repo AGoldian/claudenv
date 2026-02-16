@@ -16,7 +16,7 @@ const pkgJson = JSON.parse(await readFile(join(__dirname, '..', 'package.json'),
 const program = new Command();
 
 program
-  .name('create-project-docs')
+  .name('claudenv')
   .description('One command to set up Claude Code documentation for any project')
   .version(pkgJson.version);
 
@@ -114,7 +114,7 @@ async function runInit(dirArg, opts) {
   const yes = opts.yes || false;
   const overwrite = opts.overwrite || false;
 
-  console.log(`\n  create-project-docs v${pkgJson.version}\n`);
+  console.log(`\n  claudenv v${pkgJson.version}\n`);
   console.log(`  Scanning ${projectDir}...\n`);
 
   // 1. Detect tech stack
