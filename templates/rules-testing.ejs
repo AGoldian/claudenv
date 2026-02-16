@@ -1,0 +1,64 @@
+<% if (testPathGlobs && testPathGlobs.length > 0) { %>---
+paths:
+<% for (const g of testPathGlobs) { %>  - "<%= g %>"
+<% } %>---
+<% } %># Testing Rules
+
+## Test Framework
+<% if (testFramework) { %>Using **<%= testFramework %>** for testing.
+<% } else { %>No test framework detected. Configure one before writing tests.
+<% } %>
+
+## Commands
+<% if (commands.test) { %>- Run all tests: `<%= commands.test %>`
+<% } -%>
+<% if (commands.testSingle) { %>- Run single test: `<%= commands.testSingle %>`
+<% } -%>
+<% if (commands.testWatch) { %>- Watch mode: `<%= commands.testWatch %>`
+<% } -%>
+<% if (commands.testCoverage) { %>- Coverage: `<%= commands.testCoverage %>`
+<% } %>
+
+<% if (testFramework === 'vitest' || testFramework === 'jest') { %>## Patterns
+- Place tests adjacent to source files as `*.test.ts` or in `__tests__/` directories
+- Use `describe` blocks to group related tests
+- Use `it` (not `test`) for test cases
+- Name tests descriptively: `it('should return 404 when user not found')`
+- Prefer `toEqual` for objects, `toBe` for primitives
+- Use `vi.mock()` / `jest.mock()` for module mocking
+<% } -%>
+
+<% if (testFramework === 'pytest') { %>## Patterns
+- Place tests in `tests/` directory mirroring `src/` structure
+- Name test files `test_*.py` and test functions `test_*`
+- Use fixtures for shared setup (`conftest.py`)
+- Use `parametrize` for testing multiple inputs
+- Prefer `assert` statements over `self.assert*` methods
+<% } -%>
+
+<% if (testFramework === 'rspec') { %>## Patterns
+- Place specs in `spec/` mirroring `app/` structure
+- Use `let` and `before` for shared setup
+- Use `context` blocks for conditional scenarios
+- Use factories (FactoryBot) over fixtures
+<% } -%>
+
+<% if (language === 'go') { %>## Patterns
+- Place tests in the same package as the code under test
+- Name test files `*_test.go`
+- Use table-driven tests for multiple cases
+- Use `testify/assert` or standard `testing.T` methods
+<% } -%>
+
+<% if (language === 'rust') { %>## Patterns
+- Place unit tests in `#[cfg(test)] mod tests` at the bottom of each file
+- Place integration tests in `tests/` directory
+- Use `#[test]` attribute for test functions
+- Use `assert_eq!`, `assert_ne!`, `assert!` macros
+<% } -%>
+
+## Guidelines
+- Every bug fix should include a regression test
+- Test behavior, not implementation details
+- Keep tests independent — no shared mutable state between tests
+<% if (testConventions) { %><%= testConventions %><% } %>

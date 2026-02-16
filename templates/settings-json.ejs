@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE_PATH=$(echo $TOOL_INPUT | jq -r \".file_path // empty\"); if echo \"$FILE_PATH\" | grep -qE \"(CLAUDE\\.md|\\.claude/rules/|\\.claude/skills/)\"; then bash <%= validationScriptPath %> ; fi'",
+            "timeout": 30
+          }
+        ]
+      }
+    ]<% if (enableStopHook) { %>,
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if [ -f CLAUDE.md ]; then bash <%= validationScriptPath %> ; fi'",
+            "timeout": 15
+          }
+        ]
+      }
+    ]<% } %>
+  }
+}

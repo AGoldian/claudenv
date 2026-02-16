@@ -1,0 +1,49 @@
+# CLAUDE.md
+
+## Project overview
+<%= projectDescription || `${language || 'Unknown'} project` %><% if (framework) { %> built with <%= framework %><% } %><% if (runtime && runtime !== language) { %> on <%= runtime %><% } %>.
+<% if (deployment) { %>Deployed to <%= deployment %>.<% } %>
+
+## Commands
+<% if (commands.dev) { %>- `<%= commands.dev %>` — Start development server
+<% } -%>
+<% if (commands.build) { %>- `<%= commands.build %>` — Production build
+<% } -%>
+<% if (commands.test) { %>- `<%= commands.test %>` — Run tests
+<% } -%>
+<% if (commands.lint) { %>- `<%= commands.lint %>` — Run linter
+<% } -%>
+<% if (commands.migrate) { %>- `<%= commands.migrate %>` — Run database migrations
+<% } -%>
+<% if (commands.format) { %>- `<%= commands.format %>` — Format code
+<% } -%>
+<% if (additionalCommands && additionalCommands.length > 0) { -%>
+<% for (const cmd of additionalCommands) { %>- `<%= cmd.command %>` — <%= cmd.description %>
+<% } -%>
+<% } %>
+## Architecture
+<% if (directories && directories.length > 0) { -%>
+<% for (const dir of directories) { %>- `<%= dir.path %>` — <%= dir.description %>
+<% } -%>
+<% } else { %>Describe the key directories and their purposes here.
+<% } %>
+## Conventions
+<% if (generateRules) { %>@.claude/rules/code-style.md
+@.claude/rules/testing.md
+<% } -%>
+<% if (conventions) { %><%= conventions %>
+<% } %>
+## Workflow
+<% if (generateRules) { %>@.claude/rules/workflow.md
+<% } else { %>- Use plan mode for complex tasks; read code before editing
+- Use `/compact` when context fills up, `/clear` between unrelated tasks
+- NEVER create .md files (README, CONTRIBUTING, CHANGELOG, etc.) unless explicitly asked
+<% } %>
+## Memory
+Project state is tracked in `_state.md` at the project root. Review it at session start, update after significant decisions.
+<% if (rules && rules.length > 0) { %>
+## Rules
+<% for (const rule of rules) { %>- <%- rule %>
+<% } -%>
+<% } %>
+- NEVER create documentation files (.md) unless the user explicitly requests it

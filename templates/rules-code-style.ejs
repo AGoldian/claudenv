@@ -1,0 +1,64 @@
+<% if (pathGlobs && pathGlobs.length > 0) { %>---
+paths:
+<% for (const g of pathGlobs) { %>  - "<%= g %>"
+<% } %>---
+<% } %># Code Style Rules
+
+<% if (language === 'typescript' || language === 'javascript') { %>## TypeScript/JavaScript
+- Use <%= formatter || 'consistent' %> formatting<% if (linter) { %> with <%= linter %> for linting<% } %>
+<% if (language === 'typescript') { %>- Prefer `interface` over `type` for object shapes that may be extended
+- Use strict TypeScript (`"strict": true`) — avoid `any`, prefer `unknown`
+<% } -%>
+- Use named exports over default exports
+- Prefer `const` over `let`; never use `var`
+- Use template literals for string interpolation
+<% if (framework === 'next.js') { %>
+## Next.js Conventions
+- Use server components by default; add `'use client'` only when needed
+- Prefer server actions for mutations over API routes
+- Colocate page-specific components in the route directory
+<% } -%>
+<% if (framework === 'vite') { %>
+## Component Conventions
+- One component per file
+- Name files after the component they export
+<% } -%>
+<% } -%>
+
+<% if (language === 'python') { %>## Python
+<% if (linter === 'ruff') { %>- Use Ruff for linting and formatting
+<% } else { %>- Follow PEP 8 style guidelines
+<% } -%>
+- Use type hints for all function signatures
+- Prefer f-strings for string formatting
+- Use `pathlib.Path` over `os.path`
+<% if (framework === 'django') { %>
+## Django Conventions
+- Fat models, thin views
+- Use class-based views for CRUD operations
+- Keep business logic in model methods or services
+<% } -%>
+<% if (framework === 'fastapi') { %>
+## FastAPI Conventions
+- Use Pydantic models for request/response schemas
+- Group routes by resource in separate routers
+<% } -%>
+<% } -%>
+
+<% if (language === 'go') { %>## Go
+- Follow Effective Go and Go Code Review Comments
+- Use `errors.Is` / `errors.As` for error comparison
+- Accept interfaces, return structs
+- Keep packages small and focused
+<% } -%>
+
+<% if (language === 'rust') { %>## Rust
+- Use `clippy` for linting
+- Prefer `Result` over `panic!` for recoverable errors
+- Use `thiserror` for library error types, `anyhow` for applications
+<% } -%>
+
+## General
+- Keep functions focused — one responsibility per function
+- Name variables and functions descriptively; avoid abbreviations
+<% if (conventions) { %><%= conventions %><% } %>
