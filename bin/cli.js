@@ -9,6 +9,7 @@ import { detectTechStack } from '../src/detector.js';
 import { generateDocs, writeDocs, installScaffold } from '../src/generator.js';
 import { validateClaudeMd, validateStructure, crossReferenceCheck } from '../src/validator.js';
 import { runExistingProjectFlow, runColdStartFlow, buildDefaultConfig } from '../src/prompts.js';
+import { installGlobal, uninstallGlobal } from '../src/installer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgJson = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -20,17 +21,28 @@ program
   .description('One command to set up Claude Code documentation for any project')
   .version(pkgJson.version);
 
-// --- Default action: running without subcommand triggers init ---
+// --- Default action: install global Claude Code command ---
 program
-  .argument('[dir]', 'Project directory', '.')
-  .option('-y, --yes', 'Skip prompts, use auto-detected defaults')
-  .option('--overwrite', 'Overwrite existing files')
-  .action(runInit);
+  .option('-f, --force', 'Overwrite existing files')
+  .action(runInstall);
 
-// --- init (explicit subcommand, same logic) ---
+// --- install (explicit subcommand, same logic) ---
+program
+  .command('install')
+  .description('Install /claudenv command globally into ~/.claude/')
+  .option('-f, --force', 'Overwrite existing files')
+  .action(runInstall);
+
+// --- uninstall ---
+program
+  .command('uninstall')
+  .description('Remove /claudenv command from ~/.claude/')
+  .action(runUninstall);
+
+// --- init (legacy static flow for backward compatibility) ---
 program
   .command('init')
-  .description('Interactive setup — detect stack, ask questions, generate docs')
+  .description('Legacy: static analysis + interactive setup (no Claude AI)')
   .argument('[dir]', 'Project directory', '.')
   .option('-y, --yes', 'Skip prompts, use auto-detected defaults')
   .option('--overwrite', 'Overwrite existing files')
@@ -102,7 +114,56 @@ program
   });
 
 // =============================================
-// Main init logic
+// Install / Uninstall
+// =============================================
+async function runInstall(opts) {
+  console.log(`\n  claudenv v${pkgJson.version}\n`);
+  console.log('  Installing Claude Code integration...\n');
+
+  const force = opts.force || false;
+  const { written, skipped } = await installGlobal({ force });
+
+  if (written.length > 0) {
+    console.log(`  Installed ${written.length} file(s) to ~/.claude/:\n`);
+    for (const f of written) console.log(`    + ${f}`);
+  }
+
+  if (skipped.length > 0) {
+    console.log(`\n  Skipped ${skipped.length} existing file(s) (use --force to overwrite):\n`);
+    for (const f of skipped) console.log(`    ~ ${f}`);
+  }
+
+  if (written.length === 0 && skipped.length > 0) {
+    console.log('\n  Already installed. Use --force to reinstall.');
+  }
+
+  console.log(`
+  Done! Now open Claude Code in any project and type:
+
+    /claudenv
+
+  Claude will analyze your project and generate documentation.
+`);
+}
+
+async function runUninstall() {
+  console.log(`\n  claudenv v${pkgJson.version}\n`);
+  console.log('  Removing Claude Code integration...\n');
+
+  const { removed } = await uninstallGlobal();
+
+  if (removed.length > 0) {
+    console.log(`  Removed ${removed.length} item(s) from ~/.claude/:\n`);
+    for (const f of removed) console.log(`    - ${f}`);
+  } else {
+    console.log('  Nothing to remove — not installed.');
+  }
+
+  console.log();
+}
+
+// =============================================
+// Legacy init logic
 // =============================================
 async function runInit(dirArg, opts) {
   // Commander passes (dir, opts) for arguments, or (opts) for options-only

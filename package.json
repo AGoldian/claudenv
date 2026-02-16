@@ -1,7 +1,7 @@
 {
   "name": "claudenv",
-  "version": "1.0.1",
-  "description": "One command to set up Claude Code documentation for any project — detects tech stack, generates CLAUDE.md, rules, hooks, commands, and skills",
+  "version": "1.0.2",
+  "description": "One command to integrate Claude Code into any project — installs /claudenv command for AI-powered documentation generation",
   "type": "module",
   "bin": {
     "claudenv": "./bin/cli.js"
@@ -23,17 +23,17 @@
     "prepublishOnly": "vitest run"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
-    "@inquirer/prompts": "^7.0.0",
-    "commander": "^13.0.0",
-    "ejs": "^3.1.10",
-    "glob": "^11.0.0",
+    "@inquirer/prompts": "^8.0.0",
+    "commander": "^14.0.0",
+    "ejs": "^4.0.0",
+    "glob": "^13.0.0",
     "smol-toml": "^1.3.0"
   },
   "devDependencies": {
-    "vitest": "^3.0.0"
+    "vitest": "^4.0.0"
   },
   "keywords": [
     "claude",
