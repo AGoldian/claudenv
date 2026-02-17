@@ -10,6 +10,7 @@ import { generateDocs, writeDocs, installScaffold } from '../src/generator.js';
 import { validateClaudeMd, validateStructure, crossReferenceCheck } from '../src/validator.js';
 import { runExistingProjectFlow, runColdStartFlow, buildDefaultConfig } from '../src/prompts.js';
 import { installGlobal, uninstallGlobal } from '../src/installer.js';
+import { runLoop, rollback, checkClaudeCli } from '../src/loop.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgJson = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -111,6 +112,66 @@ program
     } else {
       console.log('\nAll checks passed.');
     }
+  });
+
+// --- loop ---
+program
+  .command('loop')
+  .description('Iterative improvement loop — spawn Claude to analyze and improve the project')
+  .option('-n, --iterations <n>', 'Max iterations (default: unlimited)', parseInt)
+  .option('--trust', 'Full trust mode — no pauses, no permission prompts')
+  .option('--goal <text>', 'Focus area for improvements')
+  .option('--pause', 'Pause between iterations (default: on unless --trust)')
+  .option('--no-pause', 'Do not pause between iterations')
+  .option('--max-turns <n>', 'Max agentic turns per iteration (default: 30)', parseInt)
+  .option('--model <model>', 'Model to use (default: sonnet)')
+  .option('--budget <usd>', 'Budget cap per iteration in USD', parseFloat)
+  .option('-d, --dir <path>', 'Target project directory')
+  .option('--allow-dirty', 'Allow running with uncommitted git changes')
+  .option('--rollback', 'Undo all changes from the most recent loop run')
+  .option('--unsafe', 'Remove default tool restrictions (allows rm -rf)')
+  .action(async (opts) => {
+    // --- Rollback mode ---
+    if (opts.rollback) {
+      await rollback({ cwd: opts.dir ? resolve(opts.dir) : process.cwd() });
+      return;
+    }
+
+    // --- Pre-flight: check Claude CLI ---
+    const cli = checkClaudeCli();
+    if (!cli.installed) {
+      console.error('\n  Error: Claude CLI not found.');
+      console.error('  Install it from https://docs.anthropic.com/en/docs/claude-code\n');
+      process.exit(1);
+    }
+    console.log(`\n  claudenv loop v${pkgJson.version}`);
+    console.log(`  Claude CLI: ${cli.version}`);
+
+    // --- Config summary ---
+    const cwd = opts.dir ? resolve(opts.dir) : process.cwd();
+    const trust = opts.trust || false;
+    const pause = opts.pause !== undefined ? opts.pause : !trust;
+
+    console.log(`  Directory: ${cwd}`);
+    console.log(`  Mode: ${trust ? 'full trust (--dangerously-skip-permissions)' : 'interactive'}`);
+    if (opts.iterations) console.log(`  Max iterations: ${opts.iterations}`);
+    if (opts.goal) console.log(`  Goal: ${opts.goal}`);
+    if (opts.model) console.log(`  Model: ${opts.model}`);
+    if (opts.budget) console.log(`  Budget: $${opts.budget}/iteration`);
+    if (opts.maxTurns) console.log(`  Max turns: ${opts.maxTurns}`);
+
+    await runLoop({
+      iterations: opts.iterations,
+      trust,
+      goal: opts.goal,
+      pause,
+      maxTurns: opts.maxTurns || 30,
+      model: opts.model,
+      budget: opts.budget,
+      cwd,
+      allowDirty: opts.allowDirty || false,
+      unsafe: opts.unsafe || false,
+    });
   });
 
 // =============================================

@@ -107,6 +107,7 @@ cp ~/.claude/skills/claudenv/scaffold/.claude/skills/doc-generator/scripts/valid
 cp ~/.claude/skills/claudenv/scaffold/.claude/skills/doc-generator/templates/detection-patterns.md .claude/skills/doc-generator/templates/detection-patterns.md
 cp ~/.claude/skills/claudenv/scaffold/.claude/skills/doc-generator/templates/mcp-servers.md .claude/skills/doc-generator/templates/mcp-servers.md
 cp ~/.claude/skills/claudenv/scaffold/.claude/commands/setup-mcp.md .claude/commands/setup-mcp.md
+cp ~/.claude/skills/claudenv/scaffold/.claude/commands/improve.md .claude/commands/improve.md
 cp ~/.claude/skills/claudenv/scaffold/.claude/agents/doc-analyzer.md .claude/agents/doc-analyzer.md
 chmod +x .claude/skills/doc-generator/scripts/validate.sh
 ```
@@ -176,6 +177,7 @@ Created:
   + .claude/commands/update-docs.md
   + .claude/commands/validate-docs.md
   + .claude/commands/setup-mcp.md
+  + .claude/commands/improve.md
   + .claude/skills/doc-generator/
   + .claude/agents/doc-analyzer.md
   + .mcp.json (if MCP servers were configured)
@@ -185,6 +187,7 @@ Available commands:
   /update-docs    — Update docs when project changes
   /validate-docs  — Check documentation completeness
   /setup-mcp      — Add or update MCP server configuration
+  /improve        — Analyze and make one improvement
 
 Next steps:
   1. Review and edit CLAUDE.md

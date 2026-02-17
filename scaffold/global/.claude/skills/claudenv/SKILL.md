@@ -55,5 +55,6 @@ The following files are available for installation into projects at `~/.claude/s
 - `.claude/skills/doc-generator/scripts/validate.sh` — Bash validation script
 - `.claude/skills/doc-generator/templates/detection-patterns.md` — Detection reference
 - `.claude/commands/setup-mcp.md` — MCP server recommendation and setup
+- `.claude/commands/improve.md` — Single improvement iteration (used by claudenv loop)
 - `.claude/skills/doc-generator/templates/mcp-servers.md` — MCP registry reference
 - `.claude/agents/doc-analyzer.md` — Read-only analysis subagent
