@@ -1,6 +1,6 @@
 {
   "name": "claudenv",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "One command to integrate Claude Code into any project — installs /claudenv command for AI-powered documentation generation",
   "type": "module",
   "bin": {
