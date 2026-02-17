@@ -92,6 +92,8 @@ export async function uninstallGlobal(options = {}) {
 
   const targets = [
     join(targetBase, 'commands', 'claudenv.md'),
+    join(targetBase, 'commands', 'setup-mcp.md'),
+    join(targetBase, 'commands', 'improve.md'),
     join(targetBase, 'skills', 'claudenv'),
   ];
 
