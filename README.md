@@ -27,15 +27,17 @@ Claude AI will:
 2. Detect your tech stack, frameworks, and tooling
 3. Ask you about the project (description, deployment, conventions)
 4. Generate all documentation files
-5. Install slash commands for ongoing maintenance
+5. Search the [MCP Registry](https://registry.modelcontextprotocol.io) and configure MCP servers
+6. Install slash commands for ongoing maintenance
 
-**Step 3.** You now have three commands available in Claude Code:
+You now have four commands available in Claude Code:
 
 | Command | What it does |
 |---------|-------------|
 | `/init-docs` | Regenerate documentation from scratch |
 | `/update-docs` | Scan for changes and propose updates |
 | `/validate-docs` | Check that documentation is complete and correct |
+| `/setup-mcp` | Recommend and configure MCP servers |
 
 ## What Gets Generated
 
@@ -43,6 +45,7 @@ Claude AI will:
 your-project/
 ├── CLAUDE.md                              # Project overview, commands, architecture
 ├── _state.md                              # Session memory (decisions, focus, issues)
+├── .mcp.json                              # MCP server configuration
 └── .claude/
     ├── rules/
     │   ├── code-style.md                  # Coding conventions (scoped by file paths)
@@ -52,7 +55,8 @@ your-project/
     ├── commands/
     │   ├── init-docs.md                   # /init-docs
     │   ├── update-docs.md                 # /update-docs
-    │   └── validate-docs.md              # /validate-docs
+    │   ├── validate-docs.md              # /validate-docs
+    │   └── setup-mcp.md                  # /setup-mcp
     ├── skills/
     │   └── doc-generator/                 # Auto-triggers when docs need updating
     └── agents/
@@ -68,6 +72,48 @@ your-project/
 | `.claude/rules/workflow.md` | Best practices: plan mode, `/compact`, subagents, git discipline |
 | `.claude/rules/code-style.md` | Language and framework-specific coding conventions |
 | `.claude/rules/testing.md` | Test framework patterns and commands |
+| `.mcp.json` | MCP server configuration with `${ENV_VAR}` placeholders |
+
+## MCP Server Recommendations
+
+`/claudenv` automatically recommends MCP servers based on your tech stack. You can also run `/setup-mcp` independently at any time.
+
+**How it works:**
+
+1. Claude analyzes your project's dependencies, databases, cloud services, and tools
+2. Searches the [official MCP Registry](https://registry.modelcontextprotocol.io) for matching servers
+3. Verifies trust via npm download counts (filters out servers with <100 monthly downloads)
+4. Presents recommendations grouped as **Essential** / **Recommended** / **Optional**
+5. Generates `.mcp.json` with selected servers
+
+**Example output** (`.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "env": {}
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres@latest", "${POSTGRES_CONNECTION_STRING}"],
+      "env": {}
+    }
+  }
+}
+```
+
+Secrets use `${ENV_VAR}` placeholders — configure them with:
+
+```bash
+claude config set env.POSTGRES_CONNECTION_STRING "postgresql://..."
+```
+
+`.mcp.json` is safe to commit — it never contains actual secrets.
+
+Run `/setup-mcp --force` to auto-select Essential + Recommended servers without prompting.
 
 ## Tech Stack Detection
 
