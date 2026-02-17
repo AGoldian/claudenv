@@ -8,7 +8,9 @@ allowed-tools: Read, Write, Glob, Grep, Bash(find:*), Bash(cat:*), Bash(mkdir:*)
 
 ## When to auto-trigger
 - CLAUDE.md does not exist in the project root
+- `.mcp.json` does not exist in a project that has CLAUDE.md
 - User mentions "documentation", "CLAUDE.md", "project setup", or "claudenv"
+- User mentions "MCP", "MCP servers", or "mcp.json"
 - User asks to configure Claude Code for their project
 - After major refactoring that changes directory structure
 
@@ -26,6 +28,9 @@ When working in a project with existing documentation, watch for:
 
 When changes are detected, suggest running `/update-docs`.
 
+### MCP Configuration
+When `.mcp.json` is missing in a project that already has CLAUDE.md, suggest running `/setup-mcp` to configure MCP servers. When the user mentions MCP servers, offer to run `/setup-mcp`.
+
 ### Validation
 After documentation changes, run the validation script:
 ```bash
@@ -37,6 +42,9 @@ bash .claude/skills/doc-generator/scripts/validate.sh 2>&1 || true
 For tech stack detection patterns, see:
 @~/.claude/skills/claudenv/templates/detection-patterns.md
 
+For MCP server search, evaluation, and configuration, see:
+@~/.claude/skills/claudenv/templates/mcp-servers.md
+
 ## Project-level scaffold
 
 The following files are available for installation into projects at `~/.claude/skills/claudenv/scaffold/`:
@@ -46,4 +54,6 @@ The following files are available for installation into projects at `~/.claude/s
 - `.claude/skills/doc-generator/SKILL.md` — Per-project doc generation skill
 - `.claude/skills/doc-generator/scripts/validate.sh` — Bash validation script
 - `.claude/skills/doc-generator/templates/detection-patterns.md` — Detection reference
+- `.claude/commands/setup-mcp.md` — MCP server recommendation and setup
+- `.claude/skills/doc-generator/templates/mcp-servers.md` — MCP registry reference
 - `.claude/agents/doc-analyzer.md` — Read-only analysis subagent

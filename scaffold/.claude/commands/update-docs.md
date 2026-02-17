@@ -34,6 +34,7 @@ Compare the current state against the existing documentation:
 - **New directories** not covered in Architecture section
 - **Stale references** to files or directories that no longer exist
 - **Missing conventions** based on new config files (e.g., new linter added)
+- **Missing or outdated `.mcp.json`** — if `.mcp.json` doesn't exist, or if new technologies have been added that could benefit from MCP servers, suggest running `/setup-mcp`
 
 ## Step 4: Propose Updates
 

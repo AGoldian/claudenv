@@ -12,6 +12,7 @@ allowed-tools: Read, Write, Glob, Grep, Bash(find:*), Bash(cat:*), Bash(node:*)
 - New files detected that change the tech stack (new framework, test runner, etc.)
 - After major refactoring that changes directory structure
 - When CLAUDE.md references files or directories that no longer exist
+- When `.mcp.json` is missing and the project has significant external dependencies
 
 ## Process
 
@@ -28,6 +29,7 @@ If CLAUDE.md already exists, read it and identify:
 
 ### 3. Generate or Update
 - For new documentation: generate CLAUDE.md, _state.md, .claude/rules/code-style.md, .claude/rules/testing.md, .claude/rules/workflow.md
+- For MCP configuration: suggest running `/setup-mcp` to search the MCP Registry and generate `.mcp.json`
 - For updates: propose specific changes and wait for user approval
 - Always present generated content for review before writing
 - NEVER create .md files beyond the ones listed above unless the user explicitly asks
@@ -54,3 +56,4 @@ Generated CLAUDE.md should follow this structure:
 Additionally generate:
 - `_state.md` — project state tracking (decisions, focus, known issues)
 - `.claude/rules/workflow.md` — Claude Code workflow best practices
+- `.mcp.json` — MCP server configuration (via `/setup-mcp`)

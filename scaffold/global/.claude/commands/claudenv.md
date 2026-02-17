@@ -1,6 +1,6 @@
 ---
 description: Set up Claude Code documentation for this project — analyze tech stack, generate CLAUDE.md, rules, hooks, commands, and skills
-allowed-tools: Read, Write, Glob, Grep, Bash(find:*), Bash(cat:*), Bash(mkdir:*), Bash(cp:*), Bash(chmod:*)
+allowed-tools: Read, Write, Glob, Grep, Bash(find:*), Bash(cat:*), Bash(mkdir:*), Bash(cp:*), Bash(chmod:*), Bash(curl:*)
 disable-model-invocation: true
 argument-hint: [--force]
 ---
@@ -105,13 +105,52 @@ cp ~/.claude/skills/claudenv/scaffold/.claude/commands/validate-docs.md .claude/
 cp ~/.claude/skills/claudenv/scaffold/.claude/skills/doc-generator/SKILL.md .claude/skills/doc-generator/SKILL.md
 cp ~/.claude/skills/claudenv/scaffold/.claude/skills/doc-generator/scripts/validate.sh .claude/skills/doc-generator/scripts/validate.sh
 cp ~/.claude/skills/claudenv/scaffold/.claude/skills/doc-generator/templates/detection-patterns.md .claude/skills/doc-generator/templates/detection-patterns.md
+cp ~/.claude/skills/claudenv/scaffold/.claude/skills/doc-generator/templates/mcp-servers.md .claude/skills/doc-generator/templates/mcp-servers.md
+cp ~/.claude/skills/claudenv/scaffold/.claude/commands/setup-mcp.md .claude/commands/setup-mcp.md
 cp ~/.claude/skills/claudenv/scaffold/.claude/agents/doc-analyzer.md .claude/agents/doc-analyzer.md
 chmod +x .claude/skills/doc-generator/scripts/validate.sh
 ```
 
 If any file already exists, **skip it** unless `$ARGUMENTS` includes `--force`.
 
-## Phase 5: Validate
+## Phase 5: MCP Server Configuration
+
+Configure MCP servers for this project by searching the official MCP Registry.
+
+Read the MCP server reference:
+@~/.claude/skills/claudenv/templates/mcp-servers.md
+
+**5.1 Identify technologies to search for:**
+Based on your Phase 1 analysis, list the key technologies that might have MCP servers (databases, cloud services, APIs, dev tools).
+
+**5.2 Search the registry:**
+For each technology, query the MCP Registry API:
+```bash
+curl -s 'https://registry.modelcontextprotocol.io/v0.1/servers?search=<tech>&version=latest&limit=10'
+```
+
+**5.3 Verify trust:**
+For each candidate with an npm package, check monthly downloads:
+```bash
+curl -s 'https://api.npmjs.org/downloads/point/last-month/<npm-package>'
+```
+Filter out servers with <100 monthly downloads.
+
+**5.4 Present recommendations:**
+Group as Essential / Recommended / Optional. For each, explain why it's relevant and show download counts.
+
+Ask the user which to configure. If `$ARGUMENTS` includes `--force`, auto-select Essential + Recommended.
+
+**5.5 Generate `.mcp.json`:**
+Write `.mcp.json` with selected servers using `${ENV_VAR}` placeholders for secrets. Follow the format in the MCP server reference.
+
+**5.6 List environment variables:**
+Tell the user how to configure required secrets:
+```
+claude config set env.VAR_NAME "your-value"
+```
+
+## Phase 6: Validate
 
 Run the validation script:
 ```bash
@@ -120,7 +159,7 @@ bash .claude/skills/doc-generator/scripts/validate.sh 2>&1 || true
 
 Fix any errors found.
 
-## Phase 6: Summary
+## Phase 7: Summary
 
 Print a summary of everything created:
 ```
@@ -136,15 +175,19 @@ Created:
   + .claude/commands/init-docs.md
   + .claude/commands/update-docs.md
   + .claude/commands/validate-docs.md
+  + .claude/commands/setup-mcp.md
   + .claude/skills/doc-generator/
   + .claude/agents/doc-analyzer.md
+  + .mcp.json (if MCP servers were configured)
 
 Available commands:
   /init-docs      — Regenerate documentation from scratch
   /update-docs    — Update docs when project changes
   /validate-docs  — Check documentation completeness
+  /setup-mcp      — Add or update MCP server configuration
 
 Next steps:
   1. Review and edit CLAUDE.md
-  2. git add .claude/ CLAUDE.md _state.md && git commit -m "Add Claude Code docs"
+  2. Configure any required MCP secrets: claude config set env.VAR_NAME "value"
+  3. git add .claude/ CLAUDE.md _state.md .mcp.json && git commit -m "Add Claude Code docs"
 ```
