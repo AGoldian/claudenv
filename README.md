@@ -30,7 +30,7 @@ Claude AI will:
 5. Search the [MCP Registry](https://registry.modelcontextprotocol.io) and configure MCP servers
 6. Install slash commands for ongoing maintenance
 
-You now have four commands available in Claude Code:
+You now have five commands available in Claude Code:
 
 | Command | What it does |
 |---------|-------------|
@@ -38,6 +38,7 @@ You now have four commands available in Claude Code:
 | `/update-docs` | Scan for changes and propose updates |
 | `/validate-docs` | Check that documentation is complete and correct |
 | `/setup-mcp` | Recommend and configure MCP servers |
+| `/improve` | Analyze and make one improvement |
 
 ## What Gets Generated
 
@@ -56,7 +57,8 @@ your-project/
     │   ├── init-docs.md                   # /init-docs
     │   ├── update-docs.md                 # /update-docs
     │   ├── validate-docs.md              # /validate-docs
-    │   └── setup-mcp.md                  # /setup-mcp
+    │   ├── setup-mcp.md                  # /setup-mcp
+    │   └── improve.md                    # /improve
     ├── skills/
     │   └── doc-generator/                 # Auto-triggers when docs need updating
     └── agents/
@@ -115,6 +117,46 @@ claude config set env.POSTGRES_CONNECTION_STRING "postgresql://..."
 
 Run `/setup-mcp --force` to auto-select Essential + Recommended servers without prompting.
 
+## Iterative Improvement Loop
+
+`claudenv loop` spawns Claude Code in headless mode to analyze and improve your project iteratively. Each run creates a git safety tag so you can always rollback.
+
+**How it works:**
+
+1. **Planning** (iteration 0) — Claude analyzes the project and generates `.claude/improvement-plan.md` with prioritized hypotheses
+2. **Execution** (iterations 1-N) — each iteration picks the top unfinished item from the plan, implements it, runs tests, and commits
+3. **Convergence** — the loop stops when the plan is complete, max iterations are reached, or the loop detects it's stuck
+
+**Usage:**
+
+```bash
+claudenv loop                              # Interactive, pauses between iterations
+claudenv loop --trust                      # Full trust, no pauses, no permission prompts
+claudenv loop --trust -n 5                 # 5 iterations in full trust
+claudenv loop --goal "add test coverage"   # Focused improvement
+claudenv loop --trust --model opus -n 3    # Use Opus, 3 iterations
+claudenv loop --budget 1.00 -n 10          # Budget cap per iteration
+claudenv loop --rollback                   # Undo all loop changes
+```
+
+| Flag | Description |
+|------|-------------|
+| `-n, --iterations <n>` | Max iterations (default: unlimited) |
+| `--trust` | Full trust mode — no pauses, skip permission prompts |
+| `--goal <text>` | Focus area for improvements |
+| `--no-pause` | Don't pause between iterations |
+| `--max-turns <n>` | Max agentic turns per iteration (default: 30) |
+| `--model <model>` | Model to use (default: sonnet) |
+| `--budget <usd>` | Budget cap per iteration in USD |
+| `-d, --dir <path>` | Target project directory |
+| `--allow-dirty` | Allow running with uncommitted changes |
+| `--rollback` | Undo all changes from the most recent loop |
+| `--unsafe` | Remove default tool restrictions |
+
+**Git safety:** Before the first iteration, a `claudenv-loop-<timestamp>` git tag is created. Each iteration commits separately. Use `claudenv loop --rollback` to reset everything, or cherry-pick individual commits.
+
+**Single iteration:** Use `/improve` inside Claude Code for a one-shot improvement without the full loop.
+
 ## Tech Stack Detection
 
 Claude AI reads your actual code, but the following are auto-detected for context:
@@ -137,6 +179,9 @@ claudenv init [dir]     Legacy: static analysis + terminal prompts (no AI)
 claudenv init -y        Legacy: skip prompts, auto-detect everything
 claudenv generate       Templates only, no scaffold
 claudenv validate       Check documentation completeness
+claudenv loop           Iterative improvement loop (spawns Claude)
+claudenv loop --trust   Full trust mode, no pauses
+claudenv loop --rollback  Undo all loop changes
 ```
 
 ## Alternative: Run Without Installing
