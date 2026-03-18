@@ -355,7 +355,11 @@ export async function runLoop(options = {}) {
   const cwd = options.cwd || process.cwd();
   const maxIterations = options.iterations || Infinity;
   const pause = options.pause !== undefined ? options.pause : !options.trust;
-  const disallowedTools = options.unsafe ? [] : ['Bash(rm -rf *)'];
+  const disallowedTools = options.unsafe
+    ? []
+    : options.disallowedTools && options.disallowedTools.length > 0
+      ? options.disallowedTools
+      : ['Bash(rm -rf *)'];
 
   // --- Pre-flight: git state ---
   if (!options.allowDirty && !isGitClean(cwd)) {
