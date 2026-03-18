@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import { resolve, join } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, chmod } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { detectTechStack } from '../src/detector.js';
@@ -11,6 +11,8 @@ import { validateClaudeMd, validateStructure, crossReferenceCheck } from '../src
 import { runExistingProjectFlow, runColdStartFlow, buildDefaultConfig } from '../src/prompts.js';
 import { installGlobal, uninstallGlobal } from '../src/installer.js';
 import { runLoop, rollback, checkClaudeCli } from '../src/loop.js';
+import { generateAutonomyConfig, printSecuritySummary, getFullModeWarning } from '../src/autonomy.js';
+import { getProfile, listProfiles } from '../src/profiles.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgJson = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -130,6 +132,7 @@ program
   .option('--allow-dirty', 'Allow running with uncommitted git changes')
   .option('--rollback', 'Undo all changes from the most recent loop run')
   .option('--unsafe', 'Remove default tool restrictions (allows rm -rf)')
+  .option('--profile <name>', 'Autonomy profile: safe, moderate, full, ci')
   .action(async (opts) => {
     // --- Rollback mode ---
     if (opts.rollback) {
@@ -147,9 +150,22 @@ program
     console.log(`\n  claudenv loop v${pkgJson.version}`);
     console.log(`  Claude CLI: ${cli.version}`);
 
+    // --- Load profile if specified ---
+    let profileDefaults = {};
+    if (opts.profile) {
+      const profile = getProfile(opts.profile);
+      profileDefaults = {
+        trust: profile.skipPermissions,
+        disallowedTools: profile.disallowedTools,
+        maxTurns: profile.maxTurns,
+        budget: profile.maxBudget,
+      };
+      console.log(`  Profile: ${profile.name} — ${profile.description}`);
+    }
+
     // --- Config summary ---
     const cwd = opts.dir ? resolve(opts.dir) : process.cwd();
-    const trust = opts.trust || false;
+    const trust = opts.trust || profileDefaults.trust || false;
     const pause = opts.pause !== undefined ? opts.pause : !trust;
 
     console.log(`  Directory: ${cwd}`);
@@ -157,22 +173,34 @@ program
     if (opts.iterations) console.log(`  Max iterations: ${opts.iterations}`);
     if (opts.goal) console.log(`  Goal: ${opts.goal}`);
     if (opts.model) console.log(`  Model: ${opts.model}`);
-    if (opts.budget) console.log(`  Budget: $${opts.budget}/iteration`);
-    if (opts.maxTurns) console.log(`  Max turns: ${opts.maxTurns}`);
+    if (opts.budget || profileDefaults.budget) console.log(`  Budget: $${opts.budget || profileDefaults.budget}/iteration`);
+    if (opts.maxTurns || profileDefaults.maxTurns) console.log(`  Max turns: ${opts.maxTurns || profileDefaults.maxTurns}`);
 
     await runLoop({
       iterations: opts.iterations,
       trust,
       goal: opts.goal,
       pause,
-      maxTurns: opts.maxTurns || 30,
+      maxTurns: opts.maxTurns || profileDefaults.maxTurns || 30,
       model: opts.model,
-      budget: opts.budget,
+      budget: opts.budget || profileDefaults.budget,
       cwd,
       allowDirty: opts.allowDirty || false,
       unsafe: opts.unsafe || false,
+      disallowedTools: profileDefaults.disallowedTools,
     });
   });
+
+// --- autonomy ---
+program
+  .command('autonomy')
+  .description('Configure autonomous agent mode with safety guardrails')
+  .option('-p, --profile <name>', 'Profile: safe, moderate, full, ci')
+  .option('-d, --dir <path>', 'Project directory', '.')
+  .option('--overwrite', 'Overwrite existing files')
+  .option('-y, --yes', 'Skip prompts')
+  .option('--dry-run', 'Preview without writing')
+  .action(runAutonomy);
 
 // =============================================
 // Install / Uninstall
@@ -322,6 +350,83 @@ function printValidation(label, result) {
   for (const warn of result.warnings) {
     console.log(`  WARN:  ${warn}`);
   }
+}
+
+// =============================================
+// Autonomy
+// =============================================
+async function runAutonomy(opts) {
+  const { select, input } = await import('@inquirer/prompts');
+  const projectDir = resolve(opts.dir);
+
+  console.log(`\n  claudenv autonomy v${pkgJson.version}\n`);
+
+  // --- Profile selection ---
+  let profileName = opts.profile;
+  if (!profileName && !opts.yes) {
+    const profiles = listProfiles();
+    profileName = await select({
+      message: 'Select autonomy profile:',
+      choices: profiles.map((p) => ({
+        name: `${p.name} — ${p.description}`,
+        value: p.name,
+      })),
+    });
+  } else if (!profileName) {
+    profileName = 'moderate';
+  }
+
+  // --- Full mode confirmation ---
+  if (profileName === 'full') {
+    console.log(getFullModeWarning());
+    if (!opts.yes) {
+      const confirm = await input({ message: 'Type "full" to confirm:' });
+      if (confirm.trim() !== 'full') {
+        console.log('  Cancelled.\n');
+        return;
+      }
+    } else {
+      console.log('  --yes flag set, proceeding without confirmation.\n');
+    }
+  }
+
+  // --- Generate files ---
+  const { files, profile } = await generateAutonomyConfig(profileName, projectDir);
+
+  printSecuritySummary(profile);
+
+  if (opts.dryRun) {
+    console.log('  Dry run — files that would be generated:\n');
+    for (const f of files) {
+      console.log(`  ── ${f.path} ──`);
+      console.log(f.content);
+    }
+    return;
+  }
+
+  // --- Write files ---
+  const { written, skipped } = await writeDocs(projectDir, files, {
+    overwrite: opts.overwrite || false,
+  });
+
+  // Make hook scripts executable
+  for (const f of files) {
+    if (f.path.endsWith('.sh')) {
+      try {
+        await chmod(join(projectDir, f.path), 0o755);
+      } catch { /* ignore */ }
+    }
+  }
+
+  printFileResults(written, skipped);
+
+  console.log(`
+  Next steps:
+    1. Review .claude/settings.json
+    2. Source aliases: source .claude/aliases.sh
+    3. ${profile.skipPermissions ? 'Run: claude --dangerously-skip-permissions' : 'Run: claude'}
+    4. git add .claude/ && git commit -m "Add autonomy config (${profileName})"
+`);
 }
 
 program.parse();

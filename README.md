@@ -144,6 +144,7 @@ claudenv loop --rollback                   # Undo all loop changes
 | `-n, --iterations <n>` | Max iterations (default: unlimited) |
 | `--trust` | Full trust mode — no pauses, skip permission prompts |
 | `--goal <text>` | Focus area for improvements |
+| `--profile <name>` | Autonomy profile: safe, moderate, full, ci |
 | `--no-pause` | Don't pause between iterations |
 | `--max-turns <n>` | Max agentic turns per iteration (default: 30) |
 | `--model <model>` | Model to use (default: sonnet) |
@@ -156,6 +157,62 @@ claudenv loop --rollback                   # Undo all loop changes
 **Git safety:** Before the first iteration, a `claudenv-loop-<timestamp>` git tag is created. Each iteration commits separately. Use `claudenv loop --rollback` to reset everything, or cherry-pick individual commits.
 
 **Single iteration:** Use `/improve` inside Claude Code for a one-shot improvement without the full loop.
+
+## Autonomous Agent Mode
+
+`claudenv autonomy` configures Claude Code for autonomous operation with predefined security profiles. Inspired by [trailofbits/claude-code-config](https://github.com/trailofbits/claude-code-config).
+
+**Usage:**
+
+```bash
+claudenv autonomy                          # Interactive profile selection
+claudenv autonomy --profile moderate       # Non-interactive, writes files directly
+claudenv autonomy --profile moderate -y    # Same — -y only needed for profile selection
+claudenv autonomy --profile ci --dry-run   # Preview generated files
+claudenv autonomy --profile full           # Full autonomy — requires typing "full" to confirm
+claudenv autonomy --profile full --yes     # Full autonomy, skip confirmation
+```
+
+### Profiles
+
+| Profile | Description | Permissions | Credentials |
+|---------|-------------|-------------|-------------|
+| `safe` | Read-only + limited bash | Allow-list only | Blocked |
+| `moderate` | Full dev with deny-list | Allow + deny lists | Blocked |
+| `full` | Unrestricted + audit logging | `--dangerously-skip-permissions` | Warn-only |
+| `ci` | Headless CI/CD (50 turns, $5 budget) | `--dangerously-skip-permissions` | Warn-only |
+
+All profiles hard-block `rm -rf`, force push to main/master, and `sudo`.
+
+### Generated files
+
+```
+.claude/
+├── settings.json               # Permissions + hooks config
+├── hooks/
+│   ├── pre-tool-use.sh         # PreToolUse guard (blocks dangerous ops)
+│   └── audit-log.sh            # PostToolUse audit → audit-log.jsonl
+└── aliases.sh                  # Shell aliases: claude-safe, claude-yolo, claude-ci, claude-local
+```
+
+CI profile also generates `.github/workflows/claude-ci.yml`.
+
+### Loop integration
+
+Use `--profile` with `claudenv loop` to apply profile settings:
+
+```bash
+claudenv loop --profile moderate --goal "add types"   # Uses profile's deny-list
+claudenv loop --profile ci -n 5                       # CI defaults: 50 turns, $5 budget
+```
+
+| Flag | Description |
+|------|-------------|
+| `-p, --profile <name>` | Profile: safe, moderate, full, ci |
+| `-d, --dir <path>` | Project directory (default: `.`) |
+| `--overwrite` | Overwrite existing files |
+| `-y, --yes` | Skip prompts |
+| `--dry-run` | Preview without writing |
 
 ## Tech Stack Detection
 
@@ -171,17 +228,21 @@ Claude AI reads your actual code, but the following are auto-detected for contex
 ## CLI Reference
 
 ```
-claudenv                Install /claudenv into ~/.claude/ (default)
-claudenv install        Same as above (explicit)
-claudenv install -f     Reinstall, overwriting existing files
-claudenv uninstall      Remove /claudenv from ~/.claude/
-claudenv init [dir]     Legacy: static analysis + terminal prompts (no AI)
-claudenv init -y        Legacy: skip prompts, auto-detect everything
-claudenv generate       Templates only, no scaffold
-claudenv validate       Check documentation completeness
-claudenv loop           Iterative improvement loop (spawns Claude)
-claudenv loop --trust   Full trust mode, no pauses
+claudenv                  Install /claudenv into ~/.claude/ (default)
+claudenv install          Same as above (explicit)
+claudenv install -f       Reinstall, overwriting existing files
+claudenv uninstall        Remove /claudenv from ~/.claude/
+claudenv init [dir]       Legacy: static analysis + terminal prompts (no AI)
+claudenv init -y          Legacy: skip prompts, auto-detect everything
+claudenv generate         Templates only, no scaffold
+claudenv validate         Check documentation completeness
+claudenv loop             Iterative improvement loop (spawns Claude)
+claudenv loop --trust     Full trust mode, no pauses
+claudenv loop --profile moderate  Use autonomy profile in loop
 claudenv loop --rollback  Undo all loop changes
+claudenv autonomy         Configure autonomous agent mode (interactive)
+claudenv autonomy -p moderate     Apply moderate profile
+claudenv autonomy -p ci --dry-run Preview CI config without writing
 ```
 
 ## Alternative: Run Without Installing
