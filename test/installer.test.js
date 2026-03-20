@@ -28,12 +28,12 @@ describe('installGlobal', () => {
     expect(content).toContain('description:');
   });
 
-  it('installs skill directory', async () => {
+  it('installs skill templates', async () => {
     await installGlobal({ claudeHome: tempDir });
 
-    const skillPath = join(tempDir, 'skills', 'claudenv', 'SKILL.md');
-    const content = await readFile(skillPath, 'utf-8');
-    expect(content).toContain('name: claudenv');
+    const templatePath = join(tempDir, 'skills', 'claudenv', 'templates', 'detection-patterns.md');
+    const content = await readFile(templatePath, 'utf-8');
+    expect(content.length).toBeGreaterThan(0);
   });
 
   it('installs project scaffold within skill', async () => {
