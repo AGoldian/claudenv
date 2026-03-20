@@ -28,6 +28,13 @@ paths:
 - Update `_state.md` when making significant architectural decisions
 - Review `_state.md` at the start of each session to restore context
 
+## Worktree Safety
+- For risky changes or alternative approaches, spawn `hypothesis-tester` subagent — it runs in an isolated git worktree
+- If a hypothesis fails, the worktree is discarded without affecting the main branch
+- Before retrying a failed approach, spawn `rollback-analyzer` to review past hypothesis branches
+- Past hypotheses are preserved as `claudenv/*` branches for reference
+- Use `git branch -l "claudenv/*"` to see all hypothesis branches
+
 ## Commits and Git
 - NEVER commit unless the user explicitly asks
 - NEVER push to remote without explicit permission

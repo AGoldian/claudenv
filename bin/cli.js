@@ -132,6 +132,7 @@ program
   .option('--allow-dirty', 'Allow running with uncommitted git changes')
   .option('--rollback', 'Undo all changes from the most recent loop run')
   .option('--unsafe', 'Remove default tool restrictions (allows rm -rf)')
+  .option('--worktree', 'Run each iteration in an isolated git worktree')
   .option('--profile <name>', 'Autonomy profile: safe, moderate, full, ci')
   .action(async (opts) => {
     // --- Rollback mode ---
@@ -170,6 +171,7 @@ program
 
     console.log(`  Directory: ${cwd}`);
     console.log(`  Mode: ${trust ? 'full trust (--dangerously-skip-permissions)' : 'interactive'}`);
+    if (opts.worktree) console.log(`  Worktree: enabled (each iteration in isolated worktree)`);
     if (opts.iterations) console.log(`  Max iterations: ${opts.iterations}`);
     if (opts.goal) console.log(`  Goal: ${opts.goal}`);
     if (opts.model) console.log(`  Model: ${opts.model}`);
@@ -187,6 +189,7 @@ program
       cwd,
       allowDirty: opts.allowDirty || false,
       unsafe: opts.unsafe || false,
+      worktree: opts.worktree || false,
       disallowedTools: profileDefaults.disallowedTools,
     });
   });
