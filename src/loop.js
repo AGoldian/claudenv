@@ -1,8 +1,21 @@
 import { execSync, spawn } from 'node:child_process';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { select } from '@inquirer/prompts';
 import { createWorktree, removeWorktree, mergeWorktree, getCurrentBranch } from './worktree.js';
+
+// =============================================
+// Work report helpers
+// =============================================
+
+/**
+ * Append a report event to .claude/work-report.jsonl
+ */
+async function writeReportEvent(cwd, event) {
+  const line = JSON.stringify({ ts: new Date().toISOString(), ...event }) + '\n';
+  await mkdir(join(cwd, '.claude'), { recursive: true });
+  await appendFile(join(cwd, '.claude', 'work-report.jsonl'), line);
+}
 
 // =============================================
 // Pre-flight: check Claude CLI
@@ -68,14 +81,20 @@ export function spawnClaude(prompt, options = {}) {
 
     const child = spawn('claude', args, {
       cwd: options.cwd || process.cwd(),
-      // stdin=inherit avoids Node.js spawn hang bug, stdout=pipe to capture JSON, stderr=inherit for real-time output
-      stdio: ['inherit', 'pipe', 'inherit'],
+      // stdin=inherit avoids Node.js spawn hang bug, stdout=pipe to capture JSON, stderr=pipe for rate limit detection
+      stdio: ['inherit', 'pipe', 'pipe'],
     });
 
     let stdout = '';
+    let stderrBuf = '';
 
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString();
+    });
+
+    child.stderr.on('data', (chunk) => {
+      process.stderr.write(chunk); // keep real-time output
+      stderrBuf += chunk.toString();
     });
 
     child.on('error', (err) => {
@@ -88,7 +107,10 @@ export function spawnClaude(prompt, options = {}) {
 
     child.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(`Claude exited with code ${code}`));
+        const isRateLimit = /rate.?limit|429|overloaded|too many requests/i.test(stderrBuf);
+        const err = new Error(`Claude exited with code ${code}`);
+        err.isRateLimit = isRateLimit;
+        reject(err);
         return;
       }
 
@@ -450,6 +472,8 @@ function printFinalSummary(log) {
  * @param {string} [options.cwd] - Working directory
  * @param {boolean} [options.allowDirty] - Allow dirty git state
  * @param {boolean} [options.worktree] - Run each iteration in an isolated git worktree
+ * @param {number} [options.startIteration] - Resume from this iteration (skip planning)
+ * @param {string} [options.initialSessionId] - Session ID to resume from
  */
 export async function runLoop(options = {}) {
   const cwd = options.cwd || process.cwd();
@@ -480,18 +504,19 @@ export async function runLoop(options = {}) {
   console.log(`\n  Git safety tag: ${gitTag}`);
   console.log(`  Pre-loop commit: ${preLoopCommit}`);
 
-  // --- Initialize loop log ---
+  // --- Initialize loop log (carry over previous data on resume) ---
+  const prevLogData = startIteration > 0 ? await readLoopLog(cwd) : null;
   const log = {
-    started: new Date().toISOString(),
+    started: prevLogData?.started || new Date().toISOString(),
     goal: options.goal || 'General improvement',
-    model: options.model || 'sonnet',
-    gitTag,
-    preLoopCommit,
-    iterations: [],
+    model: options.model || null,
+    gitTag: prevLogData?.gitTag || gitTag,
+    preLoopCommit: prevLogData?.preLoopCommit || preLoopCommit,
+    iterations: prevLogData?.iterations || [],
     completedAt: null,
     stopReason: null,
-    totalIterations: 0,
-    hypotheses: [],
+    totalIterations: prevLogData?.totalIterations || 0,
+    hypotheses: prevLogData?.hypotheses || [],
   };
 
   // --- Shared spawn options ---
@@ -505,8 +530,9 @@ export async function runLoop(options = {}) {
     appendSystemPrompt: options.goal ? buildAutonomySystemPrompt(options.goal) : undefined,
   };
 
-  let sessionId = null;
+  let sessionId = options.initialSessionId || null;
   let shuttingDown = false;
+  const startIteration = options.startIteration || 0;
 
   // --- Ctrl+C handling ---
   const sigintHandler = () => {
@@ -521,37 +547,59 @@ export async function runLoop(options = {}) {
   process.on('SIGINT', sigintHandler);
 
   try {
-    // --- Iteration 0: Planning ---
-    console.log('\n  Starting iteration 0 (planning)...\n');
+    // --- Report: loop start ---
+    await writeReportEvent(cwd, {
+      event: 'loop_start',
+      goal: options.goal || 'General improvement',
+      model: options.model || null,
+      gitTag,
+      resume: startIteration > 0,
+    });
 
-    const planPrompt = buildPlanningPrompt(options.goal);
-    const planResult = await spawnClaude(planPrompt, { ...spawnOpts, sessionId });
-    sessionId = planResult.sessionId || sessionId;
+    // --- Iteration 0: Planning (skip if resuming) ---
+    if (startIteration === 0) {
+      console.log('\n  Starting iteration 0 (planning)...\n');
+      await writeReportEvent(cwd, { event: 'iteration_start', iteration: 0, type: 'planning' });
 
-    const planIteration = {
-      number: 0,
-      startedAt: log.started,
-      completedAt: new Date().toISOString(),
-      sessionId,
-      summary: 'Generated improvement plan',
-      commitHash: getCurrentCommit(cwd),
-      usage: planResult.usage,
-    };
-    log.iterations.push(planIteration);
-    printIterationSummary(planIteration);
-    await writeLoopLog(cwd, log);
+      const planPrompt = buildPlanningPrompt(options.goal);
+      const planResult = await spawnClaude(planPrompt, { ...spawnOpts, sessionId });
+      sessionId = planResult.sessionId || sessionId;
 
-    if (shuttingDown) {
-      log.stopReason = 'interrupted';
-      log.completedAt = new Date().toISOString();
-      log.totalIterations = 0;
+      const planIteration = {
+        number: 0,
+        startedAt: log.started,
+        completedAt: new Date().toISOString(),
+        sessionId,
+        summary: 'Generated improvement plan',
+        commitHash: getCurrentCommit(cwd),
+        usage: planResult.usage,
+      };
+      log.iterations.push(planIteration);
+      printIterationSummary(planIteration);
       await writeLoopLog(cwd, log);
-      printFinalSummary(log);
-      return;
+      await writeReportEvent(cwd, {
+        event: 'iteration_end',
+        iteration: 0,
+        summary: 'Generated improvement plan',
+        commitHash: planIteration.commitHash,
+        tokens: planResult.usage ? { in: planResult.usage.input_tokens, out: planResult.usage.output_tokens } : null,
+      });
+
+      if (shuttingDown) {
+        log.stopReason = 'interrupted';
+        log.completedAt = new Date().toISOString();
+        log.totalIterations = 0;
+        await writeLoopLog(cwd, log);
+        printFinalSummary(log);
+        return;
+      }
+    } else {
+      console.log(`\n  Resuming from iteration ${startIteration}...\n`);
     }
 
-    // --- Execution iterations 1-N ---
-    for (let i = 1; i <= maxIterations; i++) {
+    // --- Execution iterations 1-N (or startIteration-N if resuming) ---
+    const firstIter = startIteration > 0 ? startIteration : 1;
+    for (let i = firstIter; i <= maxIterations; i++) {
       if (shuttingDown) break;
 
       // --- Pause between iterations ---
@@ -607,11 +655,12 @@ export async function runLoop(options = {}) {
         }
       }
 
+      await writeReportEvent(cwd, { event: 'iteration_start', iteration: i, type: 'execution' });
+
       let iterResult;
       try {
         iterResult = await spawnClaude(execPrompt, { ...spawnOpts, cwd: iterCwd, sessionId });
       } catch (err) {
-        console.error(`\n  Iteration ${i} failed: ${err.message}`);
         // In worktree mode, clean up the worktree on failure
         if (worktreeInfo) {
           try {
@@ -624,6 +673,26 @@ export async function runLoop(options = {}) {
             iteration: i,
           });
         }
+
+        // Rate limit detection — save state for resume
+        if (err.isRateLimit) {
+          log.stopReason = 'rate_limit';
+          log.pausedAt = { iteration: i, sessionId };
+          log.options = {
+            goal: options.goal,
+            model: options.model,
+            trust: options.trust,
+            maxTurns: options.maxTurns,
+            budget: options.budget,
+            worktree: options.worktree,
+          };
+          await writeLoopLog(cwd, log);
+          await writeReportEvent(cwd, { event: 'rate_limit', iteration: i, message: err.message });
+          console.log(`\n  Rate limited at iteration ${i}. Resume with: claudenv loop --resume`);
+          break;
+        }
+
+        console.error(`\n  Iteration ${i} failed: ${err.message}`);
         log.stopReason = 'error';
         break;
       }
@@ -696,6 +765,13 @@ export async function runLoop(options = {}) {
       log.totalIterations = i;
       printIterationSummary(iteration);
       await writeLoopLog(cwd, log);
+      await writeReportEvent(cwd, {
+        event: 'iteration_end',
+        iteration: i,
+        summary: iteration.summary,
+        commitHash: iteration.commitHash,
+        tokens: iterResult.usage ? { in: iterResult.usage.input_tokens, out: iterResult.usage.output_tokens } : null,
+      });
 
       // --- Convergence check ---
       if (detectConvergence(iterResult.result)) {
@@ -740,6 +816,11 @@ export async function runLoop(options = {}) {
 
   log.completedAt = new Date().toISOString();
   await writeLoopLog(cwd, log);
+  await writeReportEvent(cwd, {
+    event: 'loop_end',
+    reason: log.stopReason,
+    totalIterations: log.totalIterations,
+  });
   printFinalSummary(log);
 }
 

@@ -63,11 +63,24 @@ describe('generateSettingsJson', () => {
 });
 
 describe('generatePreToolUseHook', () => {
-  it('produces a valid bash script', () => {
+  it('produces a valid bash script that reads stdin JSON', () => {
     const profile = getProfile('moderate');
     const script = generatePreToolUseHook(profile);
     expect(script).toMatch(/^#!/);
     expect(script).toContain('set -euo pipefail');
+    // Must read from stdin, not env vars
+    expect(script).toContain('$(cat)');
+    expect(script).toContain('sed');
+    expect(script).toContain('tool_name');
+    expect(script).not.toContain('CLAUDE_TOOL_NAME');
+    expect(script).not.toContain('CLAUDE_TOOL_INPUT');
+  });
+
+  it('extracts command for Bash tool and file_path for others', () => {
+    const profile = getProfile('moderate');
+    const script = generatePreToolUseHook(profile);
+    expect(script).toContain('"command"');
+    expect(script).toContain('"file_path"');
   });
 
   it('blocks rm -rf for all profiles', () => {
@@ -115,16 +128,22 @@ describe('generatePreToolUseHook', () => {
 });
 
 describe('generateAuditLogHook', () => {
-  it('produces a valid bash script', () => {
+  it('produces a valid bash script that reads stdin JSON', () => {
     const script = generateAuditLogHook();
     expect(script).toMatch(/^#!/);
     expect(script).toContain('audit-log.jsonl');
+    // Must read from stdin, not env vars
+    expect(script).toContain('$(cat)');
+    expect(script).toContain('sed');
+    expect(script).toContain('tool_name');
+    expect(script).not.toContain('CLAUDE_TOOL_NAME');
+    expect(script).not.toContain('CLAUDE_TOOL_INPUT');
   });
 
   it('logs tool name and input', () => {
     const script = generateAuditLogHook();
-    expect(script).toContain('CLAUDE_TOOL_NAME');
-    expect(script).toContain('CLAUDE_TOOL_INPUT');
+    expect(script).toContain('TOOL_NAME');
+    expect(script).toContain('TOOL_INPUT');
   });
 });
 
