@@ -151,6 +151,22 @@ program
     console.log(`\n  claudenv loop v${pkgJson.version}`);
     console.log(`  Claude CLI: ${cli.version}`);
 
+    const cwd = opts.dir ? resolve(opts.dir) : process.cwd();
+
+    // --- Auto-detect project autonomy config ---
+    if (!opts.profile && !opts.trust) {
+      try {
+        const settingsPath = join(cwd, '.claude', 'settings.json');
+        const settings = JSON.parse(await readFile(settingsPath, 'utf-8'));
+        if (!settings.permissions || (!settings.permissions.allow && !settings.permissions.deny)) {
+          opts.trust = true;
+          console.log('  Auto-detected: full autonomy config (.claude/settings.json)');
+        }
+      } catch {
+        // No settings.json or invalid — proceed normally
+      }
+    }
+
     // --- Load profile if specified ---
     let profileDefaults = {};
     if (opts.profile) {
@@ -165,7 +181,6 @@ program
     }
 
     // --- Config summary ---
-    const cwd = opts.dir ? resolve(opts.dir) : process.cwd();
     const trust = opts.trust || profileDefaults.trust || false;
     const pause = opts.pause !== undefined ? opts.pause : !trust;
 
