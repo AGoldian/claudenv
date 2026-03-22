@@ -1,6 +1,6 @@
 # claudenv
 
-One command to set up [Claude Code](https://docs.anthropic.com/en/docs/claude-code) in any project. Claude AI analyzes your codebase and generates all the documentation it needs to work effectively.
+Set up [Claude Code](https://docs.anthropic.com/en/docs/claude-code) in any project with one command. claudenv analyzes your codebase and generates everything Claude needs to work effectively — documentation, rules, hooks, MCP servers, and slash commands.
 
 ## Quick Start
 
@@ -8,244 +8,222 @@ One command to set up [Claude Code](https://docs.anthropic.com/en/docs/claude-co
 npm i -g claudenv && claudenv
 ```
 
-Done. Open Claude Code in any project and type `/claudenv`.
+Open Claude Code in any project and type `/claudenv`. That's it.
 
-## How It Works
+## What happens when you run `/claudenv`
 
-**One-time setup** — install and activate:
+Claude reads your code, asks a few questions, and generates:
+
+- **CLAUDE.md** — project overview, architecture, key commands
+- **Rules** — coding style, testing patterns, workflow guidelines (`.claude/rules/`)
+- **MCP servers** — auto-detected from your stack, configured in `.mcp.json`
+- **Slash commands** — `/init-docs`, `/update-docs`, `/validate-docs`, `/setup-mcp`, `/improve`
+- **Hooks** — validation on tool use, audit logging (`.claude/settings.json`)
+
+Everything is committed to your repo. Team members get the same Claude experience.
+
+## Autonomous Loop
+
+The killer feature. `claudenv loop` runs Claude in headless mode, iterating over your project — planning improvements, implementing them one by one, committing each step.
 
 ```bash
-npm i -g claudenv && claudenv
+claudenv loop --goal "add test coverage" --trust -n 5
 ```
 
-This installs the `/claudenv` command globally into `~/.claude/`, making it available in every project.
+**What it does:**
 
-**In any project** — open Claude Code and type `/claudenv`.
+1. Creates a git safety tag (rollback anytime with `--rollback`)
+2. Claude generates an improvement plan (`.claude/improvement-plan.md`)
+3. Each iteration picks the next item, implements it, runs tests, commits
+4. Stops when the plan is done, iterations run out, or it detects it's stuck
 
-Claude AI will:
-1. Read your manifest files, configs, and source code
-2. Detect your tech stack, frameworks, and tooling
-3. Ask you about the project (description, deployment, conventions)
-4. Generate all documentation files
-5. Search the [MCP Registry](https://registry.modelcontextprotocol.io) and configure MCP servers
-6. Install slash commands for ongoing maintenance
+### Common recipes
 
-You now have five commands available in Claude Code:
+```bash
+# Interactive mode — pauses between iterations so you can review
+claudenv loop
 
-| Command | What it does |
-|---------|-------------|
-| `/init-docs` | Regenerate documentation from scratch |
-| `/update-docs` | Scan for changes and propose updates |
-| `/validate-docs` | Check that documentation is complete and correct |
-| `/setup-mcp` | Recommend and configure MCP servers |
-| `/improve` | Analyze and make one improvement |
+# Fully autonomous — no pauses, no permission prompts
+claudenv loop --trust
 
-## What Gets Generated
+# Goal-driven with Opus for max capability
+claudenv loop --goal "refactor auth to JWT" --trust --model opus -n 3
 
-```
-your-project/
-├── CLAUDE.md                              # Project overview, commands, architecture
-├── _state.md                              # Session memory (decisions, focus, issues)
-├── .mcp.json                              # MCP server configuration
-└── .claude/
-    ├── rules/
-    │   ├── code-style.md                  # Coding conventions (scoped by file paths)
-    │   ├── testing.md                     # Test patterns and commands
-    │   └── workflow.md                    # Claude Code best practices
-    ├── settings.json                      # Validation hooks
-    ├── commands/
-    │   ├── init-docs.md                   # /init-docs
-    │   ├── update-docs.md                 # /update-docs
-    │   ├── validate-docs.md              # /validate-docs
-    │   ├── setup-mcp.md                  # /setup-mcp
-    │   └── improve.md                    # /improve
-    ├── skills/
-    │   └── doc-generator/                 # Auto-triggers when docs need updating
-    └── agents/
-        └── doc-analyzer.md                # Read-only analysis subagent
+# Budget-conscious CI run
+claudenv loop --profile ci --goal "fix lint errors" -n 10
+
+# Undo everything from the last loop
+claudenv loop --rollback
 ```
 
-### Key Files
+### Rate limit recovery
 
-| File | Purpose |
-|------|---------|
-| `CLAUDE.md` | Compact project overview with `@import` references to rule files |
-| `_state.md` | Persists context between sessions — current focus, decisions, known issues |
-| `.claude/rules/workflow.md` | Best practices: plan mode, `/compact`, subagents, git discipline |
-| `.claude/rules/code-style.md` | Language and framework-specific coding conventions |
-| `.claude/rules/testing.md` | Test framework patterns and commands |
-| `.mcp.json` | MCP server configuration with `${ENV_VAR}` placeholders |
+If Claude hits API rate limits mid-loop, claudenv saves your progress automatically:
 
-## MCP Server Recommendations
+```bash
+# Rate limited? Just resume where you left off
+claudenv loop --resume
 
-`/claudenv` automatically recommends MCP servers based on your tech stack. You can also run `/setup-mcp` independently at any time.
+# Override model on resume (e.g., switch to cheaper model)
+claudenv loop --resume --model sonnet
+```
 
-**How it works:**
+### Live progress tracking
 
-1. Claude analyzes your project's dependencies, databases, cloud services, and tools
-2. Searches the [official MCP Registry](https://registry.modelcontextprotocol.io) for matching servers
-3. Verifies trust via npm download counts (filters out servers with <100 monthly downloads)
-4. Presents recommendations grouped as **Essential** / **Recommended** / **Optional**
-5. Generates `.mcp.json` with selected servers
+Monitor what Claude is doing in real time:
 
-**Example output** (`.mcp.json`):
+```bash
+# In another terminal — tail -f style
+claudenv report --follow
+
+# Summary of the last loop run
+claudenv report
+
+# Last 5 events only
+claudenv report --last 5
+```
+
+Events are stored in `.claude/work-report.jsonl` — machine-readable JSONL format.
+
+### All loop flags
+
+| Flag | Description |
+|------|-------------|
+| `--goal <text>` | What to work on (any goal — Claude interprets it) |
+| `--trust` | Full trust mode — no pauses, skip permission prompts |
+| `-n, --iterations <n>` | Max iterations (default: unlimited) |
+| `--model <model>` | Model: `opus`, `sonnet`, `haiku` |
+| `--profile <name>` | Autonomy profile (sets model, trust, budget) |
+| `--budget <usd>` | Budget cap per iteration in USD |
+| `--max-turns <n>` | Max agentic turns per iteration (default: 30) |
+| `--resume` | Continue from last rate-limited loop |
+| `--rollback` | Undo all changes from the most recent loop |
+| `--worktree` | Run each iteration in an isolated git worktree |
+| `--allow-dirty` | Allow running with uncommitted changes |
+| `--no-pause` | Don't pause between iterations |
+| `--unsafe` | Remove default tool restrictions (allows rm -rf) |
+| `-d, --dir <path>` | Target project directory |
+
+## Autonomy Profiles
+
+Control how much freedom Claude gets. Profiles configure permissions, hooks, model defaults, and safety guardrails.
+
+```bash
+claudenv autonomy                          # Interactive selection
+claudenv autonomy --profile moderate       # Apply directly
+claudenv autonomy --profile ci --dry-run   # Preview without writing
+```
+
+### Profile comparison
+
+| Profile | Model | Permissions | Credentials | Use case |
+|---------|-------|-------------|-------------|----------|
+| **safe** | sonnet | Allow-list only (read + limited bash) | Blocked | Exploring unfamiliar codebases |
+| **moderate** | sonnet | Allow + deny lists (full dev tools) | Blocked | Day-to-day development |
+| **full** | opus | Unrestricted (`--dangerously-skip-permissions`) | Warn-only | Maximum capability runs |
+| **ci** | haiku | Unrestricted + 50 turn / $5 budget limits | Warn-only | CI/CD pipelines |
+
+All profiles hard-block `rm -rf`, force push to main/master, and `sudo` — regardless of permission settings.
+
+### What gets generated
+
+```
+.claude/
+├── settings.json          # Permissions, hooks config
+├── hooks/
+│   ├── pre-tool-use.sh    # Blocks dangerous operations (reads stdin JSON from Claude Code)
+│   └── audit-log.sh       # Logs every tool call to audit-log.jsonl
+└── aliases.sh             # Shell aliases: claude-safe, claude-yolo, claude-ci, claude-local
+```
+
+CI profile also generates `.github/workflows/claude-ci.yml`.
+
+### Using profiles with the loop
+
+Profiles set sensible defaults for model, trust, and budget:
+
+```bash
+claudenv loop --profile ci --goal "fix lint errors"    # haiku, $5 budget, 50 turns
+claudenv loop --profile full --goal "major refactor"   # opus, unrestricted
+claudenv loop --profile moderate --goal "add types"    # sonnet, deny-list guarded
+
+# CLI flags always override profile defaults
+claudenv loop --profile ci --model sonnet              # ci profile but with sonnet
+```
+
+## MCP Server Setup
+
+`/claudenv` auto-detects your tech stack and recommends MCP servers from the [official registry](https://registry.modelcontextprotocol.io). You can also run `/setup-mcp` independently.
+
+Servers are configured in `.mcp.json` with `${ENV_VAR}` placeholders — safe to commit:
 
 ```json
 {
   "mcpServers": {
     "context7": {
       "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"],
-      "env": {}
+      "args": ["-y", "@upstash/context7-mcp@latest"]
     },
     "postgres": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres@latest", "${POSTGRES_CONNECTION_STRING}"],
-      "env": {}
+      "args": ["-y", "@modelcontextprotocol/server-postgres@latest", "${POSTGRES_CONNECTION_STRING}"]
     }
   }
 }
 ```
 
-Secrets use `${ENV_VAR}` placeholders — configure them with:
+Set secrets with `claude config set env.POSTGRES_CONNECTION_STRING "postgresql://..."`.
 
-```bash
-claude config set env.POSTGRES_CONNECTION_STRING "postgresql://..."
-```
+## File Structure
 
-`.mcp.json` is safe to commit — it never contains actual secrets.
-
-Run `/setup-mcp --force` to auto-select Essential + Recommended servers without prompting.
-
-## Iterative Improvement Loop
-
-`claudenv loop` spawns Claude Code in headless mode to analyze and improve your project iteratively. Each run creates a git safety tag so you can always rollback.
-
-**How it works:**
-
-1. **Planning** (iteration 0) — Claude analyzes the project and generates `.claude/improvement-plan.md` with prioritized hypotheses
-2. **Execution** (iterations 1-N) — each iteration picks the top unfinished item from the plan, implements it, runs tests, and commits
-3. **Convergence** — the loop stops when the plan is complete, max iterations are reached, or the loop detects it's stuck
-
-**Usage:**
-
-```bash
-claudenv loop                              # Interactive, pauses between iterations
-claudenv loop --trust                      # Full trust, no pauses, no permission prompts
-claudenv loop --trust -n 5                 # 5 iterations in full trust
-claudenv loop --goal "add test coverage"   # Focused improvement
-claudenv loop --trust --model opus -n 3    # Use Opus, 3 iterations
-claudenv loop --budget 1.00 -n 10          # Budget cap per iteration
-claudenv loop --rollback                   # Undo all loop changes
-```
-
-| Flag | Description |
-|------|-------------|
-| `-n, --iterations <n>` | Max iterations (default: unlimited) |
-| `--trust` | Full trust mode — no pauses, skip permission prompts |
-| `--goal <text>` | Focus area for improvements |
-| `--profile <name>` | Autonomy profile: safe, moderate, full, ci |
-| `--no-pause` | Don't pause between iterations |
-| `--max-turns <n>` | Max agentic turns per iteration (default: 30) |
-| `--model <model>` | Model to use (default: sonnet) |
-| `--budget <usd>` | Budget cap per iteration in USD |
-| `-d, --dir <path>` | Target project directory |
-| `--allow-dirty` | Allow running with uncommitted changes |
-| `--rollback` | Undo all changes from the most recent loop |
-| `--unsafe` | Remove default tool restrictions |
-
-**Git safety:** Before the first iteration, a `claudenv-loop-<timestamp>` git tag is created. Each iteration commits separately. Use `claudenv loop --rollback` to reset everything, or cherry-pick individual commits.
-
-**Single iteration:** Use `/improve` inside Claude Code for a one-shot improvement without the full loop.
-
-## Autonomous Agent Mode
-
-`claudenv autonomy` configures Claude Code for autonomous operation with predefined security profiles. Inspired by [trailofbits/claude-code-config](https://github.com/trailofbits/claude-code-config).
-
-**Usage:**
-
-```bash
-claudenv autonomy                          # Interactive profile selection
-claudenv autonomy --profile moderate       # Non-interactive, writes files directly
-claudenv autonomy --profile moderate -y    # Same — -y only needed for profile selection
-claudenv autonomy --profile ci --dry-run   # Preview generated files
-claudenv autonomy --profile full           # Full autonomy — requires typing "full" to confirm
-claudenv autonomy --profile full --yes     # Full autonomy, skip confirmation
-```
-
-### Profiles
-
-| Profile | Description | Permissions | Credentials |
-|---------|-------------|-------------|-------------|
-| `safe` | Read-only + limited bash | Allow-list only | Blocked |
-| `moderate` | Full dev with deny-list | Allow + deny lists | Blocked |
-| `full` | Unrestricted + audit logging | `--dangerously-skip-permissions` | Warn-only |
-| `ci` | Headless CI/CD (50 turns, $5 budget) | `--dangerously-skip-permissions` | Warn-only |
-
-All profiles hard-block `rm -rf`, force push to main/master, and `sudo`.
-
-### Generated files
+After full setup (`/claudenv` + `claudenv autonomy`):
 
 ```
-.claude/
-├── settings.json               # Permissions + hooks config
-├── hooks/
-│   ├── pre-tool-use.sh         # PreToolUse guard (blocks dangerous ops)
-│   └── audit-log.sh            # PostToolUse audit → audit-log.jsonl
-└── aliases.sh                  # Shell aliases: claude-safe, claude-yolo, claude-ci, claude-local
+your-project/
+├── CLAUDE.md                     # Project overview for Claude
+├── _state.md                     # Session memory (persists between conversations)
+├── .mcp.json                     # MCP server configuration
+└── .claude/
+    ├── settings.json             # Permissions + hooks
+    ├── rules/
+    │   ├── code-style.md         # Coding conventions
+    │   ├── testing.md            # Test patterns
+    │   └── workflow.md           # Claude workflow best practices
+    ├── hooks/
+    │   ├── pre-tool-use.sh       # Safety guardrails
+    │   └── audit-log.sh          # Audit logging
+    ├── commands/                  # Slash commands
+    │   ├── init-docs.md
+    │   ├── update-docs.md
+    │   ├── validate-docs.md
+    │   ├── setup-mcp.md
+    │   └── improve.md
+    ├── aliases.sh                # Shell aliases
+    ├── work-report.jsonl         # Loop progress events
+    ├── loop-log.json             # Loop state (for resume/rollback)
+    ├── improvement-plan.md       # Current loop plan
+    └── audit-log.jsonl           # Tool call audit trail
 ```
-
-CI profile also generates `.github/workflows/claude-ci.yml`.
-
-### Loop integration
-
-Use `--profile` with `claudenv loop` to apply profile settings:
-
-```bash
-claudenv loop --profile moderate --goal "add types"   # Uses profile's deny-list
-claudenv loop --profile ci -n 5                       # CI defaults: 50 turns, $5 budget
-```
-
-| Flag | Description |
-|------|-------------|
-| `-p, --profile <name>` | Profile: safe, moderate, full, ci |
-| `-d, --dir <path>` | Project directory (default: `.`) |
-| `--overwrite` | Overwrite existing files |
-| `-y, --yes` | Skip prompts |
-| `--dry-run` | Preview without writing |
-
-## Tech Stack Detection
-
-Claude AI reads your actual code, but the following are auto-detected for context:
-
-- **Languages**: TypeScript, JavaScript, Python, Go, Rust, Ruby, PHP, Java, Kotlin, C#
-- **Frameworks**: Next.js, Vite, Nuxt, SvelteKit, Astro, Angular, Django, FastAPI, Flask, Rails, Laravel, Spring Boot, and more
-- **Package managers**: npm, yarn, pnpm, bun, poetry, pipenv, uv, cargo, go modules
-- **Test frameworks**: Vitest, Jest, Playwright, Cypress, pytest, RSpec, go test, cargo test
-- **CI/CD**: GitHub Actions, GitLab CI, Jenkins, CircleCI
-- **Linters/formatters**: ESLint, Biome, Prettier, Ruff, RuboCop, golangci-lint, Clippy
 
 ## CLI Reference
 
 ```
-claudenv                  Install /claudenv into ~/.claude/ (default)
-claudenv install          Same as above (explicit)
-claudenv install -f       Reinstall, overwriting existing files
-claudenv uninstall        Remove /claudenv from ~/.claude/
-claudenv init [dir]       Legacy: static analysis + terminal prompts (no AI)
-claudenv init -y          Legacy: skip prompts, auto-detect everything
-claudenv generate         Templates only, no scaffold
-claudenv validate         Check documentation completeness
-claudenv loop             Iterative improvement loop (spawns Claude)
-claudenv loop --trust     Full trust mode, no pauses
-claudenv loop --profile moderate  Use autonomy profile in loop
-claudenv loop --rollback  Undo all loop changes
-claudenv autonomy         Configure autonomous agent mode (interactive)
-claudenv autonomy -p moderate     Apply moderate profile
-claudenv autonomy -p ci --dry-run Preview CI config without writing
+claudenv                              Install /claudenv into ~/.claude/
+claudenv install [-f]                 Same as above (-f to overwrite)
+claudenv uninstall                    Remove from ~/.claude/
+
+claudenv loop [options]               Autonomous improvement loop
+claudenv loop --resume                Resume rate-limited loop
+claudenv loop --rollback              Undo all loop changes
+claudenv report [--follow] [--last n] View loop progress
+
+claudenv autonomy [-p <profile>]      Configure autonomy profiles
+claudenv init [dir] [-y]              Legacy: static analysis (no AI)
+claudenv generate [-d <dir>]          Templates only, no scaffold
+claudenv validate [-d <dir>]          Check documentation completeness
 ```
 
-## Alternative: Run Without Installing
+## Run Without Installing
 
 ```bash
 npx claudenv            # npm
@@ -253,12 +231,9 @@ pnpm dlx claudenv       # pnpm
 bunx claudenv           # bun
 ```
 
-## Uninstall
+## Tech Stack Detection
 
-```bash
-claudenv uninstall      # Remove from ~/.claude/
-npm uninstall -g claudenv
-```
+Auto-detected for context: TypeScript, JavaScript, Python, Go, Rust, Ruby, PHP, Java, Kotlin, C# / Next.js, Vite, Nuxt, SvelteKit, Astro, Django, FastAPI, Flask, Rails, Laravel, Spring Boot / npm, yarn, pnpm, bun, poetry, uv, cargo / Vitest, Jest, Playwright, pytest, RSpec / GitHub Actions, GitLab CI / ESLint, Biome, Prettier, Ruff, Clippy.
 
 ## Requirements
 

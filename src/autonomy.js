@@ -63,6 +63,7 @@ export function printSecuritySummary(profile) {
   console.log(`\n  Security summary — ${profile.name} profile\n`);
   console.log(`  ${'─'.repeat(50)}`);
 
+  console.log(`  Default model:      ${profile.model || 'sonnet'}`);
   console.log(`  Skip permissions:   ${profile.skipPermissions ? 'YES (--dangerously-skip-permissions)' : 'No'}`);
   console.log(`  Credential policy:  ${profile.credentialPolicy}`);
 

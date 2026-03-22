@@ -18,6 +18,7 @@ export const AUTONOMY_PROFILES = {
   safe: {
     name: 'safe',
     description: 'Read-only + limited bash — safe for exploration',
+    model: 'sonnet',
     allowedTools: [
       'Read',
       'Glob',
@@ -41,6 +42,7 @@ export const AUTONOMY_PROFILES = {
   moderate: {
     name: 'moderate',
     description: 'Full development with deny-list — safe for most development work',
+    model: 'sonnet',
     allowedTools: [
       'Read',
       'Edit',
@@ -72,6 +74,7 @@ export const AUTONOMY_PROFILES = {
   full: {
     name: 'full',
     description: 'Full autonomy — unrestricted access with audit logging',
+    model: 'opus',
     allowedTools: [],
     disallowedTools: [],
     skipPermissions: true,
@@ -81,6 +84,7 @@ export const AUTONOMY_PROFILES = {
   ci: {
     name: 'ci',
     description: 'Headless CI/CD mode — full autonomy with turn/budget limits',
+    model: 'haiku',
     allowedTools: [],
     disallowedTools: [],
     skipPermissions: true,

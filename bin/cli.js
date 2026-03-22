@@ -10,9 +10,10 @@ import { generateDocs, writeDocs, installScaffold } from '../src/generator.js';
 import { validateClaudeMd, validateStructure, crossReferenceCheck } from '../src/validator.js';
 import { runExistingProjectFlow, runColdStartFlow, buildDefaultConfig } from '../src/prompts.js';
 import { installGlobal, uninstallGlobal } from '../src/installer.js';
-import { runLoop, rollback, checkClaudeCli } from '../src/loop.js';
+import { runLoop, rollback, checkClaudeCli, readLoopLog } from '../src/loop.js';
 import { generateAutonomyConfig, printSecuritySummary, getFullModeWarning } from '../src/autonomy.js';
 import { getProfile, listProfiles } from '../src/profiles.js';
+import { readReport, formatReport, formatEventLine, watchReport } from '../src/report.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgJson = JSON.parse(await readFile(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -131,6 +132,7 @@ program
   .option('-d, --dir <path>', 'Target project directory')
   .option('--allow-dirty', 'Allow running with uncommitted git changes')
   .option('--rollback', 'Undo all changes from the most recent loop run')
+  .option('--resume', 'Resume from last rate-limited iteration')
   .option('--unsafe', 'Remove default tool restrictions (allows rm -rf)')
   .option('--worktree', 'Run each iteration in an isolated git worktree')
   .option('--profile <name>', 'Autonomy profile: safe, moderate, full, ci')
@@ -138,6 +140,36 @@ program
     // --- Rollback mode ---
     if (opts.rollback) {
       await rollback({ cwd: opts.dir ? resolve(opts.dir) : process.cwd() });
+      return;
+    }
+
+    // --- Resume mode ---
+    if (opts.resume) {
+      const resumeCwd = opts.dir ? resolve(opts.dir) : process.cwd();
+      const prevLog = await readLoopLog(resumeCwd);
+      if (!prevLog || !prevLog.pausedAt) {
+        console.error('\n  No resumable loop found. Run a loop first or check .claude/loop-log.json.\n');
+        process.exit(1);
+      }
+      const saved = prevLog.options || {};
+      console.log(`\n  Resuming loop from iteration ${prevLog.pausedAt.iteration}`);
+      console.log(`  Goal: ${saved.goal || 'General improvement'}`);
+      console.log(`  Session: ${prevLog.pausedAt.sessionId || 'new'}\n`);
+
+      await runLoop({
+        iterations: opts.iterations || Infinity,
+        trust: saved.trust || false,
+        goal: saved.goal,
+        pause: false,
+        maxTurns: saved.maxTurns || 30,
+        model: opts.model || saved.model,
+        budget: saved.budget,
+        cwd: resumeCwd,
+        allowDirty: true,
+        worktree: saved.worktree || false,
+        startIteration: prevLog.pausedAt.iteration,
+        initialSessionId: prevLog.pausedAt.sessionId,
+      });
       return;
     }
 
@@ -176,6 +208,7 @@ program
         disallowedTools: profile.disallowedTools,
         maxTurns: profile.maxTurns,
         budget: profile.maxBudget,
+        model: profile.model,
       };
       console.log(`  Profile: ${profile.name} — ${profile.description}`);
     }
@@ -189,7 +222,8 @@ program
     if (opts.worktree) console.log(`  Worktree: enabled (each iteration in isolated worktree)`);
     if (opts.iterations) console.log(`  Max iterations: ${opts.iterations}`);
     if (opts.goal) console.log(`  Goal: ${opts.goal}`);
-    if (opts.model) console.log(`  Model: ${opts.model}`);
+    const model = opts.model || profileDefaults.model || undefined;
+    if (model) console.log(`  Model: ${model}`);
     if (opts.budget || profileDefaults.budget) console.log(`  Budget: $${opts.budget || profileDefaults.budget}/iteration`);
     if (opts.maxTurns || profileDefaults.maxTurns) console.log(`  Max turns: ${opts.maxTurns || profileDefaults.maxTurns}`);
 
@@ -199,7 +233,7 @@ program
       goal: opts.goal,
       pause,
       maxTurns: opts.maxTurns || profileDefaults.maxTurns || 30,
-      model: opts.model,
+      model,
       budget: opts.budget || profileDefaults.budget,
       cwd,
       allowDirty: opts.allowDirty || false,
@@ -207,6 +241,40 @@ program
       worktree: opts.worktree || false,
       disallowedTools: profileDefaults.disallowedTools,
     });
+  });
+
+// --- report ---
+program
+  .command('report')
+  .description('View work report from autonomous loop runs')
+  .option('-f, --follow', 'Live stream events (tail -f style)')
+  .option('--last <n>', 'Show last N events', parseInt)
+  .option('-d, --dir <path>', 'Project directory')
+  .action(async (opts) => {
+    const cwd = opts.dir ? resolve(opts.dir) : process.cwd();
+    const events = await readReport(cwd);
+
+    if (opts.follow) {
+      // Print existing events first
+      if (events.length > 0) {
+        const show = opts.last ? events.slice(-opts.last) : events;
+        process.stdout.write(formatReport(show));
+      }
+      console.log('  Watching for new events... (Ctrl+C to stop)\n');
+      await watchReport(cwd, (event) => {
+        process.stdout.write(formatEventLine(event));
+      });
+      return;
+    }
+
+    if (events.length === 0) {
+      console.log('\n  No work report found. Run `claudenv loop` first.\n');
+      return;
+    }
+
+    const show = opts.last ? events.slice(-opts.last) : events;
+    console.log();
+    process.stdout.write(formatReport(show));
   });
 
 // --- autonomy ---
@@ -247,7 +315,8 @@ async function runInstall(opts) {
   console.log(`
   Done! Now open Claude Code in any project and type:
 
-    /claudenv
+    /claudenv    — Set up project documentation
+    /autonomy   — Manage autonomy profiles
 
   Claude will analyze your project and generate documentation.
 `);
