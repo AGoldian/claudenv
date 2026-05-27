@@ -1,6 +1,10 @@
 # claudenv
 
-Set up [Claude Code](https://docs.anthropic.com/en/docs/claude-code) in any project with one command. claudenv analyzes your codebase and generates everything Claude needs to work effectively — documentation, rules, hooks, MCP servers, and slash commands.
+[![npm](https://img.shields.io/npm/v/claudenv.svg)](https://www.npmjs.com/package/claudenv)
+
+Set up [Claude Code](https://docs.anthropic.com/en/docs/claude-code) in any project with one command. claudenv analyzes your codebase and generates everything Claude needs to work effectively — documentation, rules, hooks, MCP servers, slash commands, **plus cross-session memory and vibe-decisions logging (1.3.0).**
+
+> **New in 1.3.0** — split memory layout (`~/.claudenv/memories/` global + `.claude/memories/` project), `vibe-decisions` skill (auto-log in loop, pause-and-ask interactive), new CLI: `memory`, `decisions`, `canon`, `doctor`. Companion Python package `claudenv-memory` on PyPI (alpha). See [CHANGELOG.md](./CHANGELOG.md).
 
 ## Quick Start
 
@@ -17,8 +21,8 @@ Claude reads your code, asks a few questions, and generates:
 - **CLAUDE.md** — project overview, architecture, key commands
 - **Rules** — coding style, testing patterns, workflow guidelines (`.claude/rules/`)
 - **MCP servers** — auto-detected from your stack, configured in `.mcp.json`
-- **Slash commands** — `/init-docs`, `/update-docs`, `/validate-docs`, `/setup-mcp`, `/improve`
-- **Hooks** — validation on tool use, audit logging (`.claude/settings.json`)
+- **Slash commands** — `/init-docs`, `/update-docs`, `/validate-docs`, `/setup-mcp`, `/improve`, **`/deeper`**, **`/why`**, **`/decisions`**, **`/canon`**, **`/just-code`** (1.3.0)
+- **Hooks** — validation on tool use, audit logging, decisions-logger (PostToolUse Write), regen-index (SessionEnd) — `.claude/settings.json`
 
 Everything is committed to your repo. Team members get the same Claude experience.
 
@@ -151,6 +155,87 @@ claudenv loop --profile moderate --goal "add types"    # sonnet, deny-list guard
 claudenv loop --profile ci --model sonnet              # ci profile but with sonnet
 ```
 
+## Memory & vibe-decisions (1.3.0)
+
+Persistent memory across sessions + brief overview before non-trivial technical choices. Auto-log inside `claudenv loop` (no pauses — `autonomy=law`), pause-and-ask in interactive Claude Code chats.
+
+### Layout (split)
+
+```
+~/.claudenv/memories/              # global, cross-project
+├── INDEX.md                       # briefing — auto-regenerated
+├── decisions/                     # universal tech decisions
+├── canon/index.yaml               # personal canon of references
+└── user/preferences.md            # cross-project preferences
+
+<project>/.claude/memories/        # project-scoped, committed
+├── project.md                     # stack, conventions, internal urls
+└── decisions/                     # project-only decisions
+```
+
+### Commands
+
+```bash
+# Memory
+claudenv memory init                     # initialise ~/.claudenv/memories/
+claudenv memory index                    # regenerate INDEX.md
+claudenv memory show <path>              # print a memory file
+claudenv memory edit <path>              # open in $EDITOR
+
+# Decisions
+claudenv decisions list [--scope all|global|project] [--limit N]
+claudenv decisions show <id-or-slug>
+claudenv decisions search <query>
+claudenv decisions archive <id>
+
+# Canon
+claudenv canon add <topic> <url> --why "<reason>" [--title <t>] [--author <a>]
+claudenv canon list [<topic>]
+claudenv canon search <query>
+claudenv canon prune --months 6          # find stale entries
+
+# Health
+claudenv doctor                          # OK/WARN/FAIL check
+```
+
+### Slash-commands (in Claude Code session)
+
+| Command | Purpose |
+|---|---|
+| `/deeper` | Develop the most recent decision into a full deep dive (concept → variants → trade-offs → canon) |
+| `/why <X>` | Explain technology X without logging a decision |
+| `/decisions` | List/search logged decisions via the CLI |
+| `/canon` | Browse the personal canon |
+| `/just-code` | Suppress vibe-decisions overview for the next response only |
+
+### How auto-log works in `claudenv loop`
+
+`claudenv loop` appends a system-prompt fragment that switches the `vibe-decisions` skill into **auto-log mode** — it picks the approach, writes the decision file (`/memories/decisions/<date>-<slug>.md`), and continues coding without pausing. Outside loop (interactive Claude Code) the skill defaults to **pause-and-ask** mode.
+
+After each iteration, `claudenv loop` regenerates `INDEX.md` so the next iteration's briefing reflects what was just decided.
+
+### Python companion: `claudenv-memory`
+
+Building your own agent on Claude Agent SDK and want the same memory layout?
+
+```bash
+pip install claudenv-memory
+```
+
+```python
+from claudenv_memory import LocalFileMemoryBackend
+from claude_agent_sdk import ClaudeAgentOptions
+
+backend = LocalFileMemoryBackend()  # ~/.claudenv/memories + ./.claude/memories
+options = ClaudeAgentOptions(
+    model="claude-opus-4-7",
+    extra_headers={"anthropic-beta": "context-management-2025-06-27"},
+    tools=[backend.as_tool()],
+)
+```
+
+Status: 0.1.x alpha — first production consumer is claudenv 2.0. See `python/README.md`.
+
 ## MCP Server Setup
 
 `/claudenv` auto-detects your tech stack and recommends MCP servers from the [official registry](https://registry.modelcontextprotocol.io). You can also run `/setup-mcp` independently.
@@ -221,6 +306,11 @@ claudenv autonomy [-p <profile>]      Configure autonomy profiles
 claudenv init [dir] [-y]              Legacy: static analysis (no AI)
 claudenv generate [-d <dir>]          Templates only, no scaffold
 claudenv validate [-d <dir>]          Check documentation completeness
+
+claudenv memory init|index|show|edit  Manage ~/.claudenv/memories/ (1.3.0+)
+claudenv decisions list|show|search   Logged vibe-decisions (1.3.0+)
+claudenv canon add|list|search|prune  Personal canon (1.3.0+)
+claudenv doctor                       Health check (1.3.0+)
 ```
 
 ## Run Without Installing

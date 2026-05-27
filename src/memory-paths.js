@@ -1,0 +1,86 @@
+/**
+ * Shared resolvers for the claudenv memory layout + a minimal YAML frontmatter
+ * parser used by hooks, CLI commands, and the loop integration.
+ *
+ * All path getters read process.env.CLAUDENV_HOME so tests can isolate without
+ * touching the real ~/.claudenv/.
+ */
+
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+
+export function claudenvHome() {
+  return process.env.CLAUDENV_HOME || join(homedir(), '.claudenv');
+}
+
+export function memoriesDir() {
+  return join(claudenvHome(), 'memories');
+}
+
+export function globalDecisionsDir() {
+  return join(memoriesDir(), 'decisions');
+}
+
+export function canonIndexPath() {
+  return join(memoriesDir(), 'canon', 'index.yaml');
+}
+
+export function userPrefsPath() {
+  return join(memoriesDir(), 'user', 'preferences.md');
+}
+
+export function indexMdPath() {
+  return join(memoriesDir(), 'INDEX.md');
+}
+
+export function dirtyFlagPath() {
+  return join(claudenvHome(), '.index-dirty');
+}
+
+export function projectDecisionsDir(cwd) {
+  return join(cwd, '.claude', 'memories', 'decisions');
+}
+
+/**
+ * Minimal YAML frontmatter parser. Returns null when no frontmatter is present.
+ * Handles `key: value` and inline arrays `[a, b, c]`. Heavier structures fall
+ * through as raw strings — frontmatter here is intentionally flat.
+ */
+export function parseFrontmatter(text) {
+  const match = /^---\n([\s\S]*?)\n---/.exec(text);
+  if (!match) return null;
+  const result = {};
+  for (const line of match[1].split('\n')) {
+    const m = /^([a-zA-Z_][a-zA-Z0-9_-]*):\s*(.*)$/.exec(line);
+    if (!m) continue;
+    let value = m[2].trim();
+    if (value.startsWith('[') && value.endsWith(']')) {
+      value = value
+        .slice(1, -1)
+        .split(',')
+        .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+        .filter(Boolean);
+    } else {
+      value = value.replace(/^['"]|['"]$/g, '');
+    }
+    result[m[1]] = value;
+  }
+  return result;
+}
+
+/**
+ * Render a flat object back into a YAML frontmatter block.
+ * Preserves array fields as inline `[a, b]`.
+ */
+export function renderFrontmatter(obj) {
+  const lines = ['---'];
+  for (const [key, value] of Object.entries(obj)) {
+    if (Array.isArray(value)) {
+      lines.push(`${key}: [${value.join(', ')}]`);
+    } else {
+      lines.push(`${key}: ${value}`);
+    }
+  }
+  lines.push('---');
+  return lines.join('\n');
+}

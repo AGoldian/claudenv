@@ -1,0 +1,13 @@
+# claudenv state
+# `~/.claudenv/` is intended to be a git repo for cross-device sync (planned for 1.4).
+# Until sync ships, this file just keeps obviously-transient state out of any future repo.
+
+# transient
+sessions/
+*.log
+.log/
+
+# secrets — never commit
+keys/private*
+*.local.*
+*.secret.*

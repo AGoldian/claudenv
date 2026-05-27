@@ -1,0 +1,16 @@
+# claudenv global config.
+# Created by `claudenv install` if missing; preserved on subsequent installs.
+
+# Default model for `claudenv loop` if --model is not passed.
+# Options: opus, sonnet, haiku
+default_model: sonnet
+
+# Auto-commit ~/.claudenv/ after each session (planned for 1.4 — currently unused).
+auto_commit: false
+
+# Memory scope default when vibe-decisions can't infer.
+# Options: global, project
+default_scope: global
+
+# INDEX.md regeneration: maximum number of recent decisions to surface.
+index_recent_limit: 5

@@ -288,6 +288,198 @@ program
   .option('--dry-run', 'Preview without writing')
   .action(runAutonomy);
 
+// --- hook (internal entry point for Claude Code hooks) ---
+program
+  .command('hook')
+  .description('Internal: dispatch a Claude Code hook by name (decisions-logger, regen-index)')
+  .argument('<name>', 'Hook name')
+  .action(async (name) => {
+    const { dispatch } = await import('../src/hooks/dispatcher.js');
+    await dispatch(name);
+  });
+
+// =============================================
+// 1.3.0: memory / decisions / canon / doctor
+// =============================================
+
+// --- memory ---
+const memoryCmd = program.command('memory').description('Manage the global ~/.claudenv/memories/ layout');
+
+memoryCmd
+  .command('init')
+  .description('Create the ~/.claudenv/memories/ structure (idempotent)')
+  .action(async () => {
+    const { memoryInit } = await import('../src/memory.js');
+    const { created, skipped } = await memoryInit();
+    for (const p of created) console.log(`  + ${p}`);
+    for (const p of skipped) console.log(`  ~ ${p}`);
+    console.log(`\n  ${created.length} created, ${skipped.length} already present.`);
+  });
+
+memoryCmd
+  .command('index')
+  .description('Regenerate ~/.claudenv/memories/INDEX.md from current decisions and prefs')
+  .action(async () => {
+    const { memoryIndex } = await import('../src/memory.js');
+    const result = await memoryIndex();
+    console.log(`  INDEX.md regenerated → ${result.indexPath}`);
+    console.log(`  ${result.recentCount} recent of ${result.decisionCount} total decisions`);
+  });
+
+memoryCmd
+  .command('show')
+  .argument('<path>', 'Path relative to ~/.claudenv/memories/')
+  .description('Print a memory file to stdout')
+  .action(async (path) => {
+    const { memoryShow } = await import('../src/memory.js');
+    try {
+      process.stdout.write(await memoryShow(path));
+    } catch (err) {
+      console.error(err.message);
+      process.exit(2);
+    }
+  });
+
+memoryCmd
+  .command('edit')
+  .argument('<path>', 'Path relative to ~/.claudenv/memories/')
+  .description('Open a memory file in $EDITOR (vi by default)')
+  .action(async (path) => {
+    const { memoryEdit } = await import('../src/memory.js');
+    const result = await memoryEdit(path);
+    process.exit(result.exitCode);
+  });
+
+// --- decisions ---
+const decisionsCmd = program.command('decisions').description('List, show, or search logged vibe-decisions');
+
+decisionsCmd
+  .command('list')
+  .description('List recent decisions (newest first)')
+  .option('--scope <s>', 'global | project | all', 'all')
+  .option('--limit <n>', 'Max entries', '10')
+  .action(async (opts) => {
+    const { listDecisions, formatDecisionList } = await import('../src/decisions.js');
+    const limit = parseInt(opts.limit, 10) || 10;
+    const all = await listDecisions({ scope: opts.scope });
+    console.log(formatDecisionList(all.slice(0, limit)));
+  });
+
+decisionsCmd
+  .command('show')
+  .argument('<id>', 'Slug or substring of the decision')
+  .description('Show full details of one decision')
+  .action(async (id) => {
+    const { showDecision, formatDecisionDetail } = await import('../src/decisions.js');
+    try {
+      const d = await showDecision(id);
+      console.log(formatDecisionDetail(d));
+      console.log('\n---\n');
+      console.log(d.text);
+    } catch (err) {
+      console.error(err.message);
+      process.exit(err.notFound ? 1 : 2);
+    }
+  });
+
+decisionsCmd
+  .command('search')
+  .argument('<query>', 'Substring to search topic/reason/chose')
+  .description('Search decisions')
+  .action(async (query) => {
+    const { searchDecisions, formatDecisionList } = await import('../src/decisions.js');
+    const hits = await searchDecisions(query);
+    console.log(formatDecisionList(hits));
+  });
+
+decisionsCmd
+  .command('archive')
+  .argument('<id>', 'Slug to archive')
+  .description('Move a decision into <scope-dir>/archive/')
+  .action(async (id) => {
+    const { archiveDecision } = await import('../src/decisions.js');
+    try {
+      const { from, to } = await archiveDecision(id);
+      console.log(`  archived: ${from} → ${to}`);
+    } catch (err) {
+      console.error(err.message);
+      process.exit(2);
+    }
+  });
+
+// --- canon ---
+const canonCmd = program.command('canon').description('Personal canon of references (~/.claudenv/memories/canon/index.yaml)');
+
+canonCmd
+  .command('add')
+  .argument('<topic>', 'Topic slug')
+  .argument('<url>', 'URL to add')
+  .option('--why <reason>', 'Why this reference is in the canon')
+  .option('--title <title>', 'Title')
+  .option('--author <author>', 'Author or venue')
+  .action(async (topic, url, opts) => {
+    const { canonAdd } = await import('../src/canon.js');
+    try {
+      const res = await canonAdd({
+        topic,
+        url,
+        why: opts.why,
+        title: opts.title,
+        author: opts.author,
+      });
+      if (res.added) console.log(`  + ${topic}: ${res.entry.title || res.entry.url}`);
+      else console.log(`  ~ duplicate url in ${topic} — skipped`);
+    } catch (err) {
+      console.error(err.message);
+      process.exit(2);
+    }
+  });
+
+canonCmd
+  .command('list')
+  .argument('[topic]', 'Optional topic filter')
+  .action(async (topic) => {
+    const { canonList, formatCanon } = await import('../src/canon.js');
+    const data = await canonList(topic);
+    console.log(formatCanon(data));
+  });
+
+canonCmd
+  .command('search')
+  .argument('<query>', 'Substring search')
+  .action(async (query) => {
+    const { canonSearch, formatCanon } = await import('../src/canon.js');
+    const data = await canonSearch(query);
+    console.log(formatCanon(data));
+  });
+
+canonCmd
+  .command('prune')
+  .option('--months <n>', 'Age threshold in months', '6')
+  .action(async (opts) => {
+    const { canonPrune } = await import('../src/canon.js');
+    const stale = await canonPrune(parseInt(opts.months, 10) || 6);
+    if (stale.length === 0) {
+      console.log('  No stale entries.');
+      return;
+    }
+    for (const { topic, entry, reason } of stale) {
+      const why = reason || `added ${entry.added}`;
+      console.log(`  ${topic}: ${entry.url} (${why})`);
+    }
+  });
+
+// --- doctor ---
+program
+  .command('doctor')
+  .description('Health-check the claudenv setup')
+  .action(async () => {
+    const { runDoctor } = await import('../src/doctor.js');
+    const { lines, hasFail } = await runDoctor();
+    for (const l of lines) console.log(l);
+    process.exit(hasFail ? 1 : 0);
+  });
+
 // =============================================
 // Install / Uninstall
 // =============================================

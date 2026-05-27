@@ -5,13 +5,35 @@
 import { CREDENTIAL_PATHS } from './profiles.js';
 
 /**
+ * Detect whether `claudenv` is on PATH globally. Used to decide whether
+ * settings.json hooks should call `claudenv hook ...` directly or via `npx`.
+ *
+ * Async — but settings generation is sync today. We call this from the
+ * installer flow where we await it, then pass the resolved value in.
+ */
+export async function isGlobalInstall() {
+  try {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const exec = promisify(execFile);
+    await exec('which', ['claudenv']);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Generate .claude/settings.json content for a given profile.
  * @param {object} profile - Autonomy profile
  * @param {object} detected - Tech stack detection result
+ * @param {object} [opts]
+ * @param {string} [opts.claudenvCmd] - Command prefix for `claudenv hook ...` (e.g., "claudenv" or "npx claudenv")
  * @returns {string} JSON string
  */
-export function generateSettingsJson(profile, detected = {}) {
+export function generateSettingsJson(profile, detected = {}, opts = {}) {
   const settings = {};
+  const claudenvCmd = opts.claudenvCmd || 'claudenv';
 
   if (profile.allowedTools && profile.allowedTools.length > 0) {
     settings.permissions = settings.permissions || {};
@@ -46,6 +68,16 @@ export function generateSettingsJson(profile, detected = {}) {
     command: 'bash .claude/hooks/audit-log.sh',
     timeout: 10,
   };
+  const decisionsLoggerHook = {
+    type: 'command',
+    command: `${claudenvCmd} hook decisions-logger`,
+    timeout: 5,
+  };
+  const regenIndexHook = {
+    type: 'command',
+    command: `${claudenvCmd} hook regen-index`,
+    timeout: 5,
+  };
 
   settings.hooks = {
     PreToolUse: [
@@ -70,6 +102,16 @@ export function generateSettingsJson(profile, detected = {}) {
       {
         matcher: '',
         hooks: [auditLogHook],
+      },
+      {
+        matcher: 'Write',
+        hooks: [decisionsLoggerHook],
+      },
+    ],
+    SessionEnd: [
+      {
+        matcher: '.*',
+        hooks: [regenIndexHook],
       },
     ],
   };

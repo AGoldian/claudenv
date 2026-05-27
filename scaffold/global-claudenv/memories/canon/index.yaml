@@ -1,0 +1,21 @@
+# Личный канон. Только то что вы прочитали и сочли важным.
+# Добавляйте через: claudenv canon add <topic> <url> --why "<reason>"
+# Используется vibe-decisions skill в /deeper для подбора ссылок.
+
+# Стартовое наполнение пустое — канон растёт от реальных decision-моментов.
+# Пример (раскомментируйте и адаптируйте):
+
+# distributed_locks:
+#   - title: "How to do distributed locking"
+#     author: Martin Kleppmann
+#     url: https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html
+#     why: "обязательное чтение перед выбором Redis для locks"
+#     added: 2026-05-27
+
+# raft_consensus:
+#   - title: "In Search of an Understandable Consensus Algorithm"
+#     authors: [Ongaro, Ousterhout]
+#     venue: "USENIX ATC 2014"
+#     url: https://raft.github.io/raft.pdf
+#     why: "оригинальный paper"
+#     added: 2026-05-27

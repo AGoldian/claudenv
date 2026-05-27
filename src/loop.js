@@ -3,6 +3,8 @@ import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { select } from '@inquirer/prompts';
 import { createWorktree, removeWorktree, mergeWorktree, getCurrentBranch } from './worktree.js';
+import { buildSystemPromptWithMemory } from './memory-context.js';
+import { regenIndex } from './hooks/regen-index.js';
 
 // =============================================
 // Work report helpers
@@ -51,6 +53,7 @@ export function checkClaudeCli() {
  * @param {string} [options.model] - Model to use
  * @param {number} [options.budget] - Budget cap in USD
  * @param {string} [options.appendSystemPrompt] - Append to system prompt
+ * @param {object} [options.env] - Extra env vars to merge into the child process env
  * @returns {Promise<{ result: string, sessionId: string|null, usage: object|null }>}
  */
 export function spawnClaude(prompt, options = {}) {
@@ -81,6 +84,7 @@ export function spawnClaude(prompt, options = {}) {
 
     const child = spawn('claude', args, {
       cwd: options.cwd || process.cwd(),
+      env: options.env ? { ...process.env, ...options.env } : process.env,
       // stdin=inherit avoids Node.js spawn hang bug, stdout=pipe to capture JSON, stderr=pipe for rate limit detection
       stdio: ['inherit', 'pipe', 'pipe'],
     });
@@ -520,6 +524,14 @@ export async function runLoop(options = {}) {
   };
 
   // --- Shared spawn options ---
+  // appendSystemPrompt now includes:
+  //   - autonomy=law directive (from goal)
+  //   - vibe-decisions loop-mode fragment (so the skill auto-logs without pause)
+  //   - memory briefing (INDEX.md contents) if present
+  // The prompt is stable for the session; the prefix stays cache-friendly.
+  const appendedPrompt = await buildSystemPromptWithMemory(options.goal, {
+    autonomyBuilder: buildAutonomySystemPrompt,
+  });
   const spawnOpts = {
     cwd,
     trust: options.trust || false,
@@ -527,7 +539,12 @@ export async function runLoop(options = {}) {
     maxTurns: options.maxTurns || 30,
     model: options.model,
     budget: options.budget,
-    appendSystemPrompt: options.goal ? buildAutonomySystemPrompt(options.goal) : undefined,
+    appendSystemPrompt: appendedPrompt,
+    // Secondary marker for Python helpers (e.g. claudenv-memory 0.2.x) that
+    // want to detect they're being driven by `claudenv loop`. The PRIMARY
+    // mode signal stays the directive fragment in appendSystemPrompt above —
+    // env alone wouldn't be readable by the markdown skill.
+    env: { CLAUDENV_LOOP: '1' },
   };
 
   let sessionId = options.initialSessionId || null;
@@ -584,6 +601,10 @@ export async function runLoop(options = {}) {
         commitHash: planIteration.commitHash,
         tokens: planResult.usage ? { in: planResult.usage.input_tokens, out: planResult.usage.output_tokens } : null,
       });
+
+      // Fallback for SessionEnd hook — regen INDEX.md so the next iteration's
+      // briefing reflects anything written during planning.
+      try { await regenIndex({ cwd }); } catch { /* best-effort */ }
 
       if (shuttingDown) {
         log.stopReason = 'interrupted';
@@ -772,6 +793,10 @@ export async function runLoop(options = {}) {
         commitHash: iteration.commitHash,
         tokens: iterResult.usage ? { in: iterResult.usage.input_tokens, out: iterResult.usage.output_tokens } : null,
       });
+
+      // Fallback for SessionEnd hook — regen INDEX.md from accumulated decisions
+      // so the next iteration's briefing is current.
+      try { await regenIndex({ cwd }); } catch { /* best-effort */ }
 
       // --- Convergence check ---
       if (detectConvergence(iterResult.result)) {

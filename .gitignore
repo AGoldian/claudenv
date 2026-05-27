@@ -3,3 +3,14 @@ node_modules/
 .DS_Store
 coverage/
 tmp/
+
+# Python (claudenv-memory package)
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/

@@ -22,6 +22,16 @@ describe('generateAutonomyConfig', () => {
     expect(paths).not.toContain('.github/workflows/claude-ci.yml');
   });
 
+  it('settings.json hooks reference a claudenv command (global or npx)', async () => {
+    const { files } = await generateAutonomyConfig('moderate', '.', { detected });
+    const settings = JSON.parse(files.find((f) => f.path === '.claude/settings.json').content);
+    const writeHook = settings.hooks.PostToolUse.find((b) => b.matcher === 'Write').hooks[0];
+    // Must be either `claudenv` (global) or `npx claudenv` (no global install)
+    expect(writeHook.command).toMatch(/^(claudenv|npx claudenv) hook decisions-logger$/);
+    const sessionEnd = settings.hooks.SessionEnd[0].hooks[0];
+    expect(sessionEnd.command).toMatch(/^(claudenv|npx claudenv) hook regen-index$/);
+  });
+
   it('generates correct file set for moderate profile', async () => {
     const { files } = await generateAutonomyConfig('moderate', '.', { detected });
 

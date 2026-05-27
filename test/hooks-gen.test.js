@@ -60,6 +60,29 @@ describe('generateSettingsJson', () => {
     expect(postHooks[0]).toHaveProperty('type', 'command');
     expect(postHooks[0].command).toContain('audit-log.sh');
   });
+
+  it('registers decisions-logger PostToolUse hook for Write', () => {
+    const profile = getProfile('moderate');
+    const parsed = JSON.parse(generateSettingsJson(profile));
+    const writePostBlock = parsed.hooks.PostToolUse.find((b) => b.matcher === 'Write');
+    expect(writePostBlock).toBeDefined();
+    expect(writePostBlock.hooks[0].command).toContain('hook decisions-logger');
+  });
+
+  it('registers SessionEnd regen-index hook', () => {
+    const profile = getProfile('moderate');
+    const parsed = JSON.parse(generateSettingsJson(profile));
+    expect(parsed.hooks.SessionEnd).toBeDefined();
+    const sessionHook = parsed.hooks.SessionEnd[0].hooks[0];
+    expect(sessionHook.command).toContain('hook regen-index');
+  });
+
+  it('respects claudenvCmd option for hook command prefix', () => {
+    const profile = getProfile('moderate');
+    const parsed = JSON.parse(generateSettingsJson(profile, {}, { claudenvCmd: 'npx claudenv' }));
+    const writeHook = parsed.hooks.PostToolUse.find((b) => b.matcher === 'Write').hooks[0];
+    expect(writeHook.command).toBe('npx claudenv hook decisions-logger');
+  });
 });
 
 describe('generatePreToolUseHook', () => {

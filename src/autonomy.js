@@ -9,6 +9,7 @@ import {
   generateAuditLogHook,
   generateAliases,
   generateCIWorkflow,
+  isGlobalInstall,
 } from './hooks-gen.js';
 import { detectTechStack } from './detector.js';
 
@@ -25,10 +26,14 @@ export async function generateAutonomyConfig(profileName, projectDir, options = 
   const profile = getProfile(profileName);
   const detected = options.detected || (await detectTechStack(projectDir));
 
+  // Hook commands need `claudenv` on PATH. If user installed via npm install -g
+  // we can call `claudenv` directly; otherwise fall back to `npx claudenv`.
+  const claudenvCmd = (await isGlobalInstall()) ? 'claudenv' : 'npx claudenv';
+
   const files = [
     {
       path: '.claude/settings.json',
-      content: generateSettingsJson(profile, detected),
+      content: generateSettingsJson(profile, detected, { claudenvCmd }),
     },
     {
       path: '.claude/hooks/pre-tool-use.sh',

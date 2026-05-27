@@ -5,12 +5,21 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCAFFOLD_GLOBAL = join(__dirname, '..', 'scaffold', 'global');
+const SCAFFOLD_GLOBAL_CLAUDENV = join(__dirname, '..', 'scaffold', 'global-claudenv');
 
 /**
  * Get the path to ~/.claude/
  */
 function getClaudeHome() {
   return join(homedir(), '.claude');
+}
+
+/**
+ * Get the path to ~/.claudenv/ (separate from ~/.claude/ — holds cross-project
+ * memory, canon, user preferences, and the doctor config).
+ */
+function getClaudenvHome() {
+  return join(homedir(), '.claudenv');
 }
 
 /**
@@ -31,20 +40,18 @@ async function listFiles(dir, base = dir) {
 }
 
 /**
- * Install global Claude Code artifacts to ~/.claude/.
- * Copies scaffold/global/.claude/ contents into ~/.claude/.
- *
- * @param {object} [options]
- * @param {boolean} [options.force] - Overwrite existing files
- * @param {string} [options.claudeHome] - Override ~/.claude/ path (for testing)
- * @returns {Promise<{written: string[], skipped: string[]}>}
+ * Copy every file under `sourceBase` into `targetBase`, skipping existing files
+ * unless `force` is set. Returns relative paths of what was written/skipped.
  */
-export async function installGlobal(options = {}) {
-  const { force = false, claudeHome } = options;
-  const targetBase = claudeHome || getClaudeHome();
-  const sourceBase = join(SCAFFOLD_GLOBAL, '.claude');
+async function copyTree(sourceBase, targetBase, { force }) {
+  let files;
+  try {
+    files = await listFiles(sourceBase);
+  } catch (err) {
+    if (err.code === 'ENOENT') return { written: [], skipped: [] };
+    throw err;
+  }
 
-  const files = await listFiles(sourceBase);
   const written = [];
   const skipped = [];
 
@@ -52,7 +59,6 @@ export async function installGlobal(options = {}) {
     const src = join(sourceBase, relPath);
     const dest = join(targetBase, relPath);
 
-    // Check if file exists and skip unless force
     if (!force) {
       try {
         await stat(dest);
@@ -66,7 +72,6 @@ export async function installGlobal(options = {}) {
     await mkdir(dirname(dest), { recursive: true });
     await cp(src, dest);
 
-    // Make .sh files executable
     if (relPath.endsWith('.sh')) {
       const { chmod } = await import('node:fs/promises');
       await chmod(dest, 0o755);
@@ -76,6 +81,36 @@ export async function installGlobal(options = {}) {
   }
 
   return { written, skipped };
+}
+
+/**
+ * Install global Claude Code artifacts to ~/.claude/ AND ~/.claudenv/.
+ * Copies scaffold/global/.claude/ → ~/.claude/ and scaffold/global-claudenv/ → ~/.claudenv/.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.force] - Overwrite existing files
+ * @param {string} [options.claudeHome] - Override ~/.claude/ path (for testing)
+ * @param {string} [options.claudenvHome] - Override ~/.claudenv/ path (for testing)
+ * @returns {Promise<{written: string[], skipped: string[], claudenvWritten: string[], claudenvSkipped: string[]}>}
+ */
+export async function installGlobal(options = {}) {
+  const { force = false, claudeHome, claudenvHome } = options;
+  const claudeTarget = claudeHome || getClaudeHome();
+  const claudenvTarget = claudenvHome || getClaudenvHome();
+
+  const claude = await copyTree(join(SCAFFOLD_GLOBAL, '.claude'), claudeTarget, { force });
+  const claudenv = await copyTree(SCAFFOLD_GLOBAL_CLAUDENV, claudenvTarget, { force });
+
+  // Ensure baseline subdirectories exist even when scaffold doesn't carry .gitkeep
+  // (decisions/ is empty by design until vibe-decisions fills it).
+  await mkdir(join(claudenvTarget, 'memories', 'decisions'), { recursive: true });
+
+  return {
+    written: claude.written,
+    skipped: claude.skipped,
+    claudenvWritten: claudenv.written,
+    claudenvSkipped: claudenv.skipped,
+  };
 }
 
 /**
@@ -95,7 +130,13 @@ export async function uninstallGlobal(options = {}) {
     join(targetBase, 'commands', 'autonomy.md'),
     join(targetBase, 'commands', 'setup-mcp.md'),
     join(targetBase, 'commands', 'improve.md'),
+    join(targetBase, 'commands', 'deeper.md'),
+    join(targetBase, 'commands', 'why.md'),
+    join(targetBase, 'commands', 'decisions.md'),
+    join(targetBase, 'commands', 'canon.md'),
+    join(targetBase, 'commands', 'just-code.md'),
     join(targetBase, 'skills', 'claudenv'),
+    join(targetBase, 'skills', 'vibe-decisions'),
   ];
 
   for (const target of targets) {

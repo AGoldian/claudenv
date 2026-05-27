@@ -1,0 +1,16 @@
+# User preferences
+
+Copy this file to `preferences.md` (in the same directory) and edit. The `vibe-decisions` skill reads it and uses it as context when suggesting approaches.
+
+Format: free-form markdown, but short lines (one preference per line) work best for cache stability.
+
+## Examples
+
+- Default branch naming: `<initials>/<short-desc>`
+- Commit style: conventional commits, lowercase subject
+- Editor: helix
+- Package manager: pnpm (Node), uv (Python), cargo (Rust)
+- TypeScript: strict + noUncheckedIndexedAccess
+- Python: type hints required, no `Any` без TODO
+- Prefer integration tests с реальной БД over heavy mocking
+- Не использовать `as` import unless prefix collision
