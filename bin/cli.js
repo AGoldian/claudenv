@@ -469,6 +469,108 @@ canonCmd
     }
   });
 
+// =============================================
+// Workspaces (isolated per-company/context memory)
+// =============================================
+const wsCmd = program.command('workspace').description('Isolated memory spaces (~/.claudenv/workspaces/)');
+
+wsCmd
+  .command('add')
+  .argument('<id>', 'Workspace id (slug: a-z0-9-_)')
+  .option('--name <name>', 'Human-readable name')
+  .option('--desc <description>', 'Description')
+  .option('--path <path...>', 'Project path(s) bound to this workspace')
+  .action(async (id, opts) => {
+    const { createWorkspace } = await import('../src/workspaces.js');
+    try {
+      await createWorkspace(id, { name: opts.name, description: opts.desc, paths: opts.path });
+      console.log(`  + workspace "${id}" created`);
+    } catch (err) {
+      console.error(err.message);
+      process.exit(2);
+    }
+  });
+
+wsCmd
+  .command('list')
+  .action(async () => {
+    const { listWorkspaces } = await import('../src/workspaces.js');
+    const list = await listWorkspaces();
+    if (list.length === 0) {
+      console.log('  No workspaces yet — create one with `claudenv workspace add <id>`');
+      return;
+    }
+    for (const w of list) {
+      console.log(`  ${w.active ? '*' : ' '} ${w.id}${w.name && w.name !== w.id ? ` — ${w.name}` : ''}`);
+    }
+  });
+
+wsCmd
+  .command('use')
+  .argument('<id>', 'Workspace id to activate')
+  .action(async (id) => {
+    const { useWorkspace } = await import('../src/workspaces.js');
+    try {
+      await useWorkspace(id);
+      console.log(`  active workspace → ${id}`);
+    } catch (err) {
+      console.error(err.message);
+      process.exit(2);
+    }
+  });
+
+wsCmd
+  .command('show')
+  .action(async () => {
+    const { showActive } = await import('../src/workspaces.js');
+    const w = await showActive();
+    if (!w) {
+      console.log('  No active workspace (set CLAUDENV_WORKSPACE or run `claudenv workspace use <id>`)');
+      return;
+    }
+    console.log(`  active: ${w.id} (${w.source})`);
+    if (w.name && w.name !== w.id) console.log(`  name:   ${w.name}`);
+    if (w.description) console.log(`  desc:   ${w.description}`);
+    if (w.paths && w.paths.length) console.log(`  paths:  ${w.paths.join(', ')}`);
+  });
+
+// =============================================
+// Sources (connectors in the active workspace)
+// =============================================
+const srcCmd = program.command('source').description('Data-source connectors in the active workspace');
+
+srcCmd
+  .command('list')
+  .action(async () => {
+    const { listConnectors } = await import('../src/sources.js');
+    const { workspace, connectors } = await listConnectors();
+    if (!workspace) {
+      console.log('  No active workspace — set one first (`claudenv workspace use <id>`)');
+      return;
+    }
+    if (connectors.length === 0) {
+      console.log(`  [${workspace}] no connectors yet — add one via /add-source in Claude Code`);
+      return;
+    }
+    console.log(`  [${workspace}]`);
+    for (const c of connectors) {
+      console.log(`    ${c.name}  (${c.type}, ${c.status})${c.host ? `  ${c.host}` : ''}`);
+    }
+  });
+
+srcCmd
+  .command('show')
+  .argument('<name>', 'Connector name')
+  .action(async (name) => {
+    const { showConnector } = await import('../src/sources.js');
+    const text = await showConnector(name);
+    if (!text) {
+      console.error(`  Connector "${name}" not found in active workspace`);
+      process.exit(2);
+    }
+    console.log(text);
+  });
+
 // --- doctor ---
 program
   .command('doctor')

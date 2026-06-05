@@ -4,6 +4,11 @@ node_modules/
 coverage/
 tmp/
 
+# Secrets - connectors write creds here, never commit
+.env
+.env.local
+*.secret
+
 # Python (claudenv-memory package)
 __pycache__/
 *.pyc
