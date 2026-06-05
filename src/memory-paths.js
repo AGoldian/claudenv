@@ -8,6 +8,7 @@
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { readFileSync } from 'node:fs';
 
 export function claudenvHome() {
   return process.env.CLAUDENV_HOME || join(homedir(), '.claudenv');
@@ -39,6 +40,47 @@ export function dirtyFlagPath() {
 
 export function projectDecisionsDir(cwd) {
   return join(cwd, '.claude', 'memories', 'decisions');
+}
+
+// --- Workspace layer (isolated per-company/context memory) ---
+
+export function workspacesDir() {
+  return join(claudenvHome(), 'workspaces');
+}
+
+export function activeWorkspaceFile() {
+  return join(claudenvHome(), 'active-workspace');
+}
+
+export function workspaceDir(id) {
+  return join(workspacesDir(), id);
+}
+
+export function workspaceManifestPath(id) {
+  return join(workspaceDir(id), 'workspace.yaml');
+}
+
+export function workspaceConnectorsDir(id) {
+  return join(workspaceDir(id), 'memories', 'connectors');
+}
+
+export function workspaceContextDir(id) {
+  return join(workspaceDir(id), 'memories', 'context');
+}
+
+/**
+ * Resolve the active workspace id. Priority: env CLAUDENV_WORKSPACE, then the
+ * pointer file ~/.claudenv/active-workspace. Returns null if none set.
+ * Intentionally does NOT scan all workspaces - isolation barrier.
+ */
+export function activeWorkspaceId() {
+  if (process.env.CLAUDENV_WORKSPACE) return process.env.CLAUDENV_WORKSPACE.trim();
+  try {
+    const id = readFileSync(activeWorkspaceFile(), 'utf-8').trim();
+    return id || null;
+  } catch {
+    return null;
+  }
 }
 
 /**

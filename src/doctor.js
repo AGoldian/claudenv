@@ -13,7 +13,10 @@ import {
   memoriesDir,
   globalDecisionsDir,
   indexMdPath,
+  activeWorkspaceId,
+  workspaceConnectorsDir,
 } from './memory-paths.js';
+import { scanForSecretLeaks } from './sources.js';
 
 const OK = '[OK]  ';
 const WARN = '[WARN]';
@@ -151,6 +154,28 @@ async function countDecisionsCheck() {
   return { status: OK, msg: `${count} global decisions logged` };
 }
 
+async function workspaceLeakCheck() {
+  const id = activeWorkspaceId();
+  if (!id) return { status: OK, msg: 'no active workspace — secret-leak scan skipped' };
+  let files;
+  try {
+    files = (await readdir(workspaceConnectorsDir(id))).filter((f) => f.endsWith('.md'));
+  } catch {
+    return { status: OK, msg: `workspace "${id}": no connectors to scan` };
+  }
+  const leaks = [];
+  for (const f of files) {
+    try {
+      const found = scanForSecretLeaks(await readFile(join(workspaceConnectorsDir(id), f), 'utf-8'));
+      if (found.length) leaks.push(`${f}:${found[0].line}`);
+    } catch { /* skip */ }
+  }
+  if (leaks.length) {
+    return { status: FAIL, msg: `secret values in workspace memory: ${leaks.join(', ')} — move to .env.local` };
+  }
+  return { status: OK, msg: `workspace "${id}": connector memory clean (no secret values)` };
+}
+
 export async function runDoctor() {
   const checks = [
     await nodeVersionCheck(),
@@ -162,6 +187,7 @@ export async function runDoctor() {
     await projectHooksCheck(),
     await pythonModuleCheck(),
     await countDecisionsCheck(),
+    await workspaceLeakCheck(),
   ];
 
   let hasFail = false;

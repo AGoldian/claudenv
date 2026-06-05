@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Коннектор к REST API: <%= name %> (base <%= host %>).
+Сгенерирован claudenv (skill source-connector).
+
+Токен читается из .env.local (gitignored), НЕ хардкодится:
+  <%= tokenEnv %>=<токен>
+
+Зависимости: pip install requests
+"""
+
+import os
+import sys
+
+import requests
+
+BASE = os.getenv("<%= name.toUpperCase().replace(/[^A-Z0-9]/g, '_') %>_BASE", "<%= host %>")
+
+
+def load_env_local(path=".env.local"):
+    env = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    env[k.strip()] = v.strip()
+    return env
+
+
+_env = load_env_local()
+TOKEN = _env.get("<%= tokenEnv %>") or os.getenv("<%= tokenEnv %>")
+
+if not TOKEN:
+    sys.exit("Нет токена в .env.local: <%= tokenEnv %>")
+
+
+def client():
+    s = requests.Session()
+    s.headers.update({
+        "Authorization": f"Bearer {TOKEN}",
+        "Accept": "application/json",
+    })
+    return s
+
+
+def get(path, **params):
+    """GET к API, вернуть JSON. path - относительный (/api/...)."""
+    r = client().get(f"{BASE}{path}", params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+if __name__ == "__main__":
+    path = sys.argv[1] if len(sys.argv) > 1 else "/"
+    import json
+    print(json.dumps(get(path), ensure_ascii=False, indent=2)[:2000])

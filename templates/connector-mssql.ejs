@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Коннектор к MSSQL: <%= name %> (host <%= host %>, db <%= database %>).
+Сгенерирован claudenv (skill source-connector).
+
+Креды читаются из .env.local (gitignored), НЕ хардкодятся:
+  <%= userEnv %>=<логин>
+  <%= passwordEnv %>=<пароль>
+
+Зависимости: pip install pymssql sqlalchemy pandas
+"""
+
+import os
+import sys
+from urllib.parse import quote_plus
+
+import pandas as pd
+from sqlalchemy import create_engine
+
+HOST = os.getenv("<%= name.toUpperCase().replace(/[^A-Z0-9]/g, '_') %>_HOST", "<%= host %>")
+PORT = os.getenv("<%= name.toUpperCase().replace(/[^A-Z0-9]/g, '_') %>_PORT", "<%= port || 1433 %>")
+DATABASE = os.getenv("<%= name.toUpperCase().replace(/[^A-Z0-9]/g, '_') %>_DB", "<%= database %>")
+
+
+def load_env_local(path=".env.local"):
+    env = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    env[k.strip()] = v.strip()
+    return env
+
+
+_env = load_env_local()
+USER = _env.get("<%= userEnv %>") or os.getenv("<%= userEnv %>")
+PASSWORD = _env.get("<%= passwordEnv %>") or os.getenv("<%= passwordEnv %>")
+
+if not USER or not PASSWORD:
+    sys.exit("Нет кред в .env.local: <%= userEnv %> / <%= passwordEnv %>")
+
+
+def engine():
+    # пароль экранируем - в нём могут быть спецсимволы (@ : ~ и т.п.)
+    url = f"mssql+pymssql://{quote_plus(USER)}:{quote_plus(PASSWORD)}@{HOST}:{PORT}/{DATABASE}"
+    return create_engine(url)
+
+
+def query(sql):
+    """Выполнить SELECT, вернуть DataFrame."""
+    return pd.read_sql(sql, engine())
+
+
+if __name__ == "__main__":
+    sql = sys.argv[1] if len(sys.argv) > 1 else "SELECT 1 AS ok"
+    df = query(sql)
+    print(f"Строк: {len(df)}")
+    with pd.option_context("display.max_columns", None, "display.width", 200):
+        print(df.head(20).to_string(index=False))
