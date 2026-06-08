@@ -1,0 +1,36 @@
+# gitleaks config for claudenv — secret scanning in CI.
+#
+# claudenv's own discipline is "secrets only in .env.local (gitignored), never in
+# the repo". This config enforces that on every push/PR. The repo intentionally
+# contains FAKE credentials and example credential SHAPES (it is a docs/skill
+# generator), so those are allowlisted to keep the signal real.
+
+title = "claudenv gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intentional non-secrets: test fixtures, docs/skill examples, env-var references"
+
+# Files that legitimately show credential patterns without real values:
+#  - test/**         unit tests feed FAKE secrets to the leak-scanner on purpose
+#  - scaffold/**     SKILL.md / commands show example credential shapes
+#  - templates/**    connector templates reference env-var NAMES, not values
+#  - *.md            README/CHANGELOG document credential shapes
+paths = [
+  '''(^|/)test/''',
+  '''(^|/)scaffold/''',
+  '''(^|/)templates/''',
+  '''\.md$''',
+  '''(^|/)\.gitleaks\.toml$''',
+]
+
+# Patterns that are references/placeholders, never real secret values:
+regexes = [
+  '''FAKE[-_][A-Za-z0-9-]+''',          # explicit fake markers in fixtures
+  '''<[^>\n]{1,40}>''',                  # placeholders like <password>, <token>
+  '''\$\{\{?\s*[A-Za-z_]''',            # ${VAR} and ${{ secrets.X }} references
+  '''secret_refs''',                     # claudenv stores env-var NAMES, not values
+  '''[A-Z][A-Z0-9_]*(_PASSWORD|_TOKEN|_KEY|_SECRET|_LOGIN)''', # env-var names
+]

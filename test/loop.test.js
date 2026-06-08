@@ -11,7 +11,24 @@ import {
   getLatestLoopTag,
   readLoopLog,
   writeLoopLog,
+  buildExecutionPrompt,
 } from '../src/loop.js';
+
+describe('buildExecutionPrompt', () => {
+  it('injects the dynamic-workflow orchestration directive (with the opt-in keyword)', () => {
+    const prompt = buildExecutionPrompt(1, null, 'Audit all modules');
+    expect(prompt).toContain('Parallel decomposition (dynamic workflow)');
+    expect(prompt).toContain('Workflow tool');
+    expect(prompt).toMatch(/workflow/i);
+    // guarded: only for 3+ independent sub-tasks
+    expect(prompt).toContain('3 or more');
+  });
+
+  it('injects the directive in the no-goal branch too', () => {
+    const prompt = buildExecutionPrompt(2, 5, null);
+    expect(prompt).toContain('Parallel decomposition (dynamic workflow)');
+  });
+});
 
 describe('checkClaudeCli', () => {
   it('returns installed status', () => {

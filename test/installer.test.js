@@ -115,6 +115,17 @@ describe('installGlobal', () => {
     const content = await readFile(cmdPath, 'utf-8');
     expect(content).toContain('deep dive');
   });
+
+  it('installs the harness skill and /harness command (1.3.2)', async () => {
+    await installGlobal({ claudeHome: tempDir, claudenvHome: tempClaudenvDir });
+
+    const skill = await readFile(join(tempDir, 'skills', 'harness', 'SKILL.md'), 'utf-8');
+    expect(skill).toContain('name: harness');
+    expect(skill).toContain('Harness mode (loop)');
+
+    const cmd = await readFile(join(tempDir, 'commands', 'harness.md'), 'utf-8');
+    expect(cmd).toContain('/harness');
+  });
 });
 
 describe('uninstallGlobal', () => {
@@ -144,6 +155,14 @@ describe('uninstallGlobal', () => {
 
     // Verify skill directory is gone
     await expect(stat(join(tempDir, 'skills', 'claudenv'))).rejects.toThrow();
+  });
+
+  it('removes the harness skill and command on uninstall (1.3.2)', async () => {
+    await installGlobal({ claudeHome: tempDir, claudenvHome: tempClaudenvDir });
+    const { removed } = await uninstallGlobal({ claudeHome: tempDir });
+    expect(removed).toContain(join('skills', 'harness'));
+    expect(removed).toContain(join('commands', 'harness.md'));
+    await expect(stat(join(tempDir, 'skills', 'harness'))).rejects.toThrow();
   });
 
   it('handles nothing to remove gracefully', async () => {

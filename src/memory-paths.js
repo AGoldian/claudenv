@@ -38,6 +38,25 @@ export function dirtyFlagPath() {
   return join(claudenvHome(), '.index-dirty');
 }
 
+// --- Skills layer (~/.claude/skills/ — where Claude Code loads skills from) ---
+
+/**
+ * Path to ~/.claude/ — where Claude Code reads global commands and skills.
+ * Distinct from claudenvHome() (~/.claudenv/), which holds memory/canon/workspaces.
+ */
+export function claudeDir() {
+  return process.env.CLAUDE_HOME || join(homedir(), '.claude');
+}
+
+export function claudeSkillsDir() {
+  return join(claudeDir(), 'skills');
+}
+
+/** Cache of the parsed awesome-claude-skills registry. */
+export function skillsRegistryCachePath() {
+  return join(claudenvHome(), 'skills-registry.json');
+}
+
 export function projectDecisionsDir(cwd) {
   return join(cwd, '.claude', 'memories', 'decisions');
 }

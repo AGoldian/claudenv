@@ -571,6 +571,200 @@ srcCmd
     console.log(text);
   });
 
+// =============================================
+// Skills (discover & install from awesome-claude-skills + curated catalog)
+// =============================================
+const skillsCmd = program
+  .command('skills')
+  .description('Discover & install Claude skills (awesome-claude-skills + curated catalog)');
+
+skillsCmd
+  .command('search')
+  .description('Find skills matching a need (curated catalog + cached live registry)')
+  .argument('[query...]', 'What capability you need (free text)')
+  .option('--refresh', 'Refetch the live registry before searching')
+  .option('--limit <n>', 'Max results', '15')
+  .action(async (queryParts, opts) => {
+    const { loadCatalog, searchCatalog } = await import('../src/skills-registry.js');
+    const query = (queryParts || []).join(' ');
+    const catalog = await loadCatalog({ refresh: opts.refresh });
+    const hits = searchCatalog(catalog, query).slice(0, parseInt(opts.limit, 10) || 15);
+    if (hits.length === 0) {
+      console.log('  No matching skills. Try `claudenv skills search --refresh <query>`.');
+      return;
+    }
+    console.log();
+    for (const e of hits) {
+      const tag = e.curated ? '★' : ' ';
+      console.log(`  ${tag} ${e.slug}  [${e.install}]${e.category ? `  ${e.category}` : ''}`);
+      if (e.description) console.log(`      ${e.description}`);
+    }
+    console.log(`\n  ★ = curated (vetted, safe to auto-install). Install: claudenv skills add <slug>`);
+  });
+
+skillsCmd
+  .command('list')
+  .description('List skills installed under ~/.claude/skills/')
+  .action(async () => {
+    const { listInstalledSkills } = await import('../src/skills-registry.js');
+    const installed = await listInstalledSkills();
+    if (installed.length === 0) {
+      console.log('  No skills installed yet — `claudenv skills search <task>`');
+      return;
+    }
+    console.log();
+    for (const s of installed) {
+      console.log(`  ${s.slug}${s.hasSkillMd ? '' : '  (no SKILL.md)'}`);
+      if (s.description) console.log(`      ${s.description.split('\n')[0].slice(0, 100)}`);
+    }
+  });
+
+skillsCmd
+  .command('info')
+  .description('Show trust level, install class, and source for a skill')
+  .argument('<name>', 'Skill slug or name')
+  .option('--refresh', 'Refetch the live registry first')
+  .action(async (name, opts) => {
+    const { loadCatalog, findEntry, resolveSkillSource } = await import('../src/skills-registry.js');
+    const catalog = await loadCatalog({ refresh: opts.refresh });
+    const e = findEntry(catalog, name);
+    if (!e) {
+      console.error(`  No catalog entry for "${name}". Try \`claudenv skills search ${name}\`.`);
+      process.exit(1);
+    }
+    const src = resolveSkillSource(e);
+    console.log(`\n  ${e.name}  (${e.slug})`);
+    if (e.category) console.log(`  category: ${e.category}`);
+    console.log(`  trust:    ${e.curated ? 'curated (vetted)' : 'live (confirm before installing)'}`);
+    console.log(`  install:  ${e.install} → ${src.kind}`);
+    if (src.kind === 'bootstrap') console.log(`  command:  ${src.command}`);
+    console.log(`  url:      ${e.url}`);
+    if (e.description) console.log(`\n  ${e.description}`);
+    console.log();
+  });
+
+skillsCmd
+  .command('add')
+  .description('Install a skill into ~/.claude/skills/ (curated = safe; live = confirm)')
+  .argument('<name>', 'Skill slug or name to install')
+  .option('-f, --force', 'Overwrite an already-installed skill')
+  .option('--refresh', 'Refetch the live registry first')
+  .option('-y, --yes', 'Confirm a live (non-curated) install and run bootstrap installers')
+  .action(async (name, opts) => {
+    const { loadCatalog, findEntry, makeEntryFromUrl, classifyUrl, installSkill } = await import('../src/skills-registry.js');
+    const catalog = await loadCatalog({ refresh: opts.refresh });
+    let entry = findEntry(catalog, name);
+    // Allow `skills add <github-url-or-relative-path>` (always treated as live).
+    if (!entry && (/^https?:\/\//i.test(name) || /^\.?\//.test(name)) && classifyUrl(name) !== 'guide') {
+      entry = makeEntryFromUrl(name);
+      console.log(`  resolving URL as a live skill (${entry.install}): ${name}`);
+    }
+    if (!entry) {
+      console.error(`  No catalog entry for "${name}". Try \`claudenv skills search ${name}\`.`);
+      process.exit(1);
+    }
+    if (entry.curated !== true) {
+      console.log(`  ⚠ "${entry.slug}" is a LIVE (non-curated) entry. A SKILL.md is auto-loaded,`);
+      console.log(`    model-facing instructions — review ${entry.url} before relying on it.`);
+    }
+
+    const result = await installSkill(entry, { force: opts.force, confirmLive: !!opts.yes });
+
+    switch (result.action) {
+      case 'installed':
+        console.log(`  + installed ${result.slug} → ${result.path}`);
+        console.log(`    source: ${result.source}`);
+        console.log(`    note: only SKILL.md was fetched; for scripts/templates see ${entry.url}`);
+        break;
+      case 'exists':
+        console.log(`  ~ ${result.slug} already installed (${result.path}) — use --force to overwrite`);
+        break;
+      case 'needs-confirm':
+        console.log(`  ⛔ "${result.slug}" is live (untrusted) — not installed.`);
+        console.log(`    Review ${result.url}, then re-run with --yes to confirm.`);
+        break;
+      case 'bootstrap':
+        await handleBootstrap(result, opts);
+        break;
+      case 'guide':
+        console.log(`  i ${result.slug} can't be auto-copied: ${result.reason}`);
+        console.log(`    open: ${result.url}`);
+        break;
+      case 'invalid':
+        console.error(`  ! ${result.slug} fetch rejected: ${result.reason}`);
+        console.error(`    source: ${result.url}`);
+        process.exit(2);
+        break;
+      default:
+        console.error(`  ! unexpected result: ${JSON.stringify(result)}`);
+        process.exit(2);
+    }
+  });
+
+skillsCmd
+  .command('refresh')
+  .description('Refetch the awesome-claude-skills registry into the local cache')
+  .action(async () => {
+    const { refreshCatalog } = await import('../src/skills-registry.js');
+    const { skillsRegistryCachePath } = await import('../src/memory-paths.js');
+    try {
+      const entries = await refreshCatalog();
+      console.log(`  cached ${entries.length} registry entries → ${skillsRegistryCachePath()}`);
+    } catch (err) {
+      console.error(`  Could not refresh registry: ${err.message}`);
+      process.exit(2);
+    }
+  });
+
+async function handleBootstrap(result, opts) {
+  const { existsSync } = await import('node:fs');
+  const { homedir } = await import('node:os');
+  const { execSync } = await import('node:child_process');
+  const bin = join(homedir(), '.kimi-webbridge', 'bin', 'kimi-webbridge');
+
+  if (result.slug === 'kimi-webbridge' && existsSync(bin)) {
+    console.log('  kimi-webbridge already installed — ensuring the daemon is running...');
+    try {
+      execSync(`"${bin}" start`, { stdio: 'inherit' });
+    } catch { /* start is idempotent; ignore */ }
+    return;
+  }
+
+  console.log(`\n  ${result.slug} installs via a shell command (not a copyable SKILL.md):\n`);
+  console.log(`    ${result.command}\n`);
+  if (!opts.yes) {
+    console.log('  Review it, then re-run with --yes to execute, or run it yourself.');
+    return;
+  }
+  console.log('  Running (--yes given)...\n');
+  try {
+    execSync(result.command, { stdio: 'inherit', shell: '/bin/bash' });
+  } catch (err) {
+    console.error(`  Bootstrap failed: ${err.message}`);
+    process.exit(2);
+  }
+}
+
+// --- capabilities (self-introspection: "connect to claudenv, understand it") ---
+program
+  .command('capabilities')
+  .alias('caps')
+  .description('Print a map of everything this claudenv install offers')
+  .option('--json', 'Emit the raw capability map as JSON')
+  .option('-d, --dir <path>', 'Project directory')
+  .action(async (opts) => {
+    const { buildCapabilityMap, formatCapabilities } = await import('../src/capabilities.js');
+    const map = await buildCapabilityMap({
+      cwd: opts.dir ? resolve(opts.dir) : process.cwd(),
+      version: pkgJson.version,
+    });
+    if (opts.json) {
+      console.log(JSON.stringify(map, null, 2));
+      return;
+    }
+    console.log('\n' + formatCapabilities(map) + '\n');
+  });
+
 // --- doctor ---
 program
   .command('doctor')

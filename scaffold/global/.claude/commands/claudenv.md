@@ -96,7 +96,7 @@ Copy the following scaffold files from the global skill directory into this proj
 
 ```bash
 # Create directories
-mkdir -p .claude/commands .claude/skills/doc-generator/scripts .claude/skills/doc-generator/templates .claude/agents
+mkdir -p .claude/commands .claude/skills/doc-generator/scripts .claude/skills/doc-generator/templates .claude/skills/dynamic-workflows .claude/agents
 
 # Copy project-level scaffold from global skill
 cp ~/.claude/skills/claudenv/scaffold/.claude/commands/init-docs.md .claude/commands/init-docs.md
@@ -108,6 +108,7 @@ cp ~/.claude/skills/claudenv/scaffold/.claude/skills/doc-generator/templates/det
 cp ~/.claude/skills/claudenv/scaffold/.claude/skills/doc-generator/templates/mcp-servers.md .claude/skills/doc-generator/templates/mcp-servers.md
 cp ~/.claude/skills/claudenv/scaffold/.claude/commands/setup-mcp.md .claude/commands/setup-mcp.md
 cp ~/.claude/skills/claudenv/scaffold/.claude/commands/improve.md .claude/commands/improve.md
+cp ~/.claude/skills/claudenv/scaffold/.claude/skills/dynamic-workflows/SKILL.md .claude/skills/dynamic-workflows/SKILL.md
 cp ~/.claude/skills/claudenv/scaffold/.claude/agents/doc-analyzer.md .claude/agents/doc-analyzer.md
 chmod +x .claude/skills/doc-generator/scripts/validate.sh
 ```
@@ -179,6 +180,7 @@ Created:
   + .claude/commands/setup-mcp.md
   + .claude/commands/improve.md
   + .claude/skills/doc-generator/
+  + .claude/skills/dynamic-workflows/
   + .claude/agents/doc-analyzer.md
   + .mcp.json (if MCP servers were configured)
 

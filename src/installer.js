@@ -136,9 +136,11 @@ export async function uninstallGlobal(options = {}) {
     join(targetBase, 'commands', 'canon.md'),
     join(targetBase, 'commands', 'just-code.md'),
     join(targetBase, 'commands', 'add-source.md'),
+    join(targetBase, 'commands', 'harness.md'),
     join(targetBase, 'skills', 'claudenv'),
     join(targetBase, 'skills', 'vibe-decisions'),
     join(targetBase, 'skills', 'source-connector'),
+    join(targetBase, 'skills', 'harness'),
   ];
 
   for (const target of targets) {

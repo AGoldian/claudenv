@@ -2,9 +2,11 @@
 
 [![npm](https://img.shields.io/npm/v/claudenv.svg)](https://www.npmjs.com/package/claudenv)
 
-Set up [Claude Code](https://docs.anthropic.com/en/docs/claude-code) in any project with one command. claudenv analyzes your codebase and generates everything Claude needs to work effectively — documentation, rules, hooks, MCP servers, slash commands, **plus cross-session memory and vibe-decisions logging (1.3.0).**
+Set up [Claude Code](https://docs.anthropic.com/en/docs/claude-code) in any project with one command. claudenv analyzes your codebase and generates everything Claude needs to work effectively — documentation, rules, hooks, MCP servers, slash commands, **cross-session memory, and a self-extending harness that equips Claude with new skills on demand (1.3.2).**
 
-> **New in 1.3.0** — split memory layout (`~/.claudenv/memories/` global + `.claude/memories/` project), `vibe-decisions` skill (auto-log in loop, pause-and-ask interactive), new CLI: `memory`, `decisions`, `canon`, `doctor`. Companion Python package `claudenv-memory` on PyPI (alpha). See [CHANGELOG.md](./CHANGELOG.md).
+> **New in 1.3.2 — self-extending harness.** Claude can now introspect what claudenv gives it (`claudenv capabilities`), find what's missing for the task, and equip it from the [awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills) registry (`claudenv skills search|add`) — plus first-class **kimi-webbridge** browser automation. New `/harness` command + skill drive it autonomously. See [CHANGELOG.md](./CHANGELOG.md).
+>
+> **1.3.0** — split memory layout, `vibe-decisions` skill, CLI: `memory`, `decisions`, `canon`, `doctor`. Companion Python package `claudenv-memory` on PyPI (alpha).
 
 ## Quick Start
 
@@ -214,6 +216,72 @@ claudenv doctor                          # OK/WARN/FAIL check
 
 After each iteration, `claudenv loop` regenerates `INDEX.md` so the next iteration's briefing reflects what was just decided.
 
+## Self-extending harness (1.3.2)
+
+claudenv is Claude's *harness* — a CLI plus skills, connectors, memory, and a
+browser bridge. The `harness` skill makes Claude **self-aware** of it and lets it
+**extend itself**: understand what it already has, find what's missing for the
+task, and equip it — autonomously.
+
+```bash
+claudenv capabilities          # self-introspection: skills, memory, workspace,
+                               # connectors, kimi-webbridge, MCP, registry
+claudenv skills search "pdf"   # find a skill (curated + awesome-claude-skills)
+claudenv skills add docx       # install it into ~/.claude/skills/
+claudenv skills add kimi-webbridge   # bootstrap browser automation
+```
+
+In Claude Code, `/harness` (or just describe a task that needs a capability you
+lack) runs the whole flow: introspect → gap-analysis → discover → equip →
+configure connectors/MCP/memory → bootstrap the browser.
+
+### Skills registry
+
+`claudenv skills` discovers skills from
+[awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills). The
+registry is a heterogeneous markdown README, so each entry is resolved by **install
+class**:
+
+| Class | Example | Behavior |
+|---|---|---|
+| `repo-path` | `github.com/anthropics/skills/tree/main/skills/docx` | fetch raw `SKILL.md` |
+| `in-repo` | a `./folder/` link in the README | fetch from the awesome repo |
+| `repo-root` | `github.com/user/skill` | best-effort probe, else guide |
+| `bootstrap` | kimi-webbridge | run an install command (e.g. `install.sh`) |
+| `guide` | a vendor dashboard / Composio connector | open the link to set up |
+
+A curated **bundled catalog** ships with claudenv, so `search`/`add` work
+**offline**; `claudenv skills refresh` parses and caches the live registry.
+
+### Trust & safety
+
+A fetched `SKILL.md` is auto-loaded, model-facing instruction text — a
+prompt-injection surface. So:
+
+- **Curated (★)** entries have a vetted source URL + install class (the bytes are
+  fetched live, not content-pinned) → the only entries allowed to auto-equip,
+  including inside `claudenv loop`.
+- **Live** entries (parsed from the README or a raw URL) are gated in code:
+  `skills add` writes nothing without `--yes`. `claudenv loop` never passes it.
+
+`skills add` only ever writes under `~/.claude/skills/<slug>/`, never overwrites
+without `--force`, validates the body, and **never executes** fetched content.
+Bootstrap installers are printed first and run only with `--yes`.
+
+### Browser automation (kimi-webbridge)
+
+`claudenv skills add kimi-webbridge` makes browser automation work even if it
+isn't installed yet — it detects an existing daemon and starts it, or surfaces the
+official bootstrap. `claudenv capabilities` and `claudenv doctor` report its
+health. Once up, Claude drives your real browser (with your login sessions) via
+the `kimi-webbridge` skill.
+
+## Dynamic workflows
+
+`/claudenv` installs a `dynamic-workflows` skill that teaches Claude when to reach for the built-in **Workflow** tool — deterministic multi-agent orchestration (fan-out, pipelines, adversarial-verify, multi-file migrations) — and when to stay single-threaded. It triggers on wide, decomposable work (reviewing/migrating across many files, research over many sources, generate-N-then-judge) and stays out of the way for single-file or sequential edits.
+
+`claudenv loop` drives the same capability: alongside the no-pause loop-mode fragment, it injects a guarded **Parallel decomposition** directive into the execution prompt that tells the loop to run a dynamic workflow when the picked plan item splits into 3+ independent sub-tasks (and to stay single-threaded otherwise). Fan-out is hard-capped (multi-agent work costs ~15× the tokens and runs under the per-iteration budget); if the Workflow runtime is unavailable it degrades to parallel `Agent` calls. The directive lives in the user prompt because the Workflow tool's opt-in keys on the user message — a system-prompt hint alone won't trigger it.
+
 ### Python companion: `claudenv-memory`
 
 Building your own agent on Claude Agent SDK and want the same memory layout?
@@ -311,6 +379,16 @@ claudenv memory init|index|show|edit  Manage ~/.claudenv/memories/ (1.3.0+)
 claudenv decisions list|show|search   Logged vibe-decisions (1.3.0+)
 claudenv canon add|list|search|prune  Personal canon (1.3.0+)
 claudenv doctor                       Health check (1.3.0+)
+
+claudenv workspace add|list|use|show  Isolated per-company memory spaces (1.3.1+)
+claudenv source list|show             Data-source connectors of active workspace (1.3.1+)
+
+claudenv capabilities [--json] [-d <dir>]  Self-introspection map (1.3.2+)
+claudenv skills search <query>        Find skills (curated + awesome-claude-skills) (1.3.2+)
+claudenv skills list                  Skills installed under ~/.claude/skills/ (1.3.2+)
+claudenv skills info <name>           Trust level, install class, source (1.3.2+)
+claudenv skills add <name> [--force]  Install a skill (--yes to run bootstraps) (1.3.2+)
+claudenv skills refresh               Refetch the live registry into cache (1.3.2+)
 ```
 
 ## Run Without Installing
