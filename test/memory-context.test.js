@@ -26,6 +26,19 @@ describe('buildSystemPromptWithMemory', () => {
     expect(prompt).toContain('Do NOT pause');
   });
 
+  it('includes dynamic-workflows loop fragment so the loop may fan out', async () => {
+    const prompt = await buildSystemPromptWithMemory(null);
+    expect(prompt).toContain('Dynamic-workflows mode (loop)');
+    expect(prompt).toContain('Workflow tool');
+  });
+
+  it('includes harness loop fragment so the loop may self-equip (curated only)', async () => {
+    const prompt = await buildSystemPromptWithMemory(null);
+    expect(prompt).toContain('Harness mode (loop)');
+    expect(prompt).toContain('claudenv skills');
+    expect(prompt).toContain('CURATED');
+  });
+
   it('combines autonomy directive when goal is set', async () => {
     const prompt = await buildSystemPromptWithMemory('make money', {
       autonomyBuilder: (g) => `AUTONOMY: ${g}`,

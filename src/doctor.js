@@ -17,6 +17,7 @@ import {
   workspaceConnectorsDir,
 } from './memory-paths.js';
 import { scanForSecretLeaks } from './sources.js';
+import { kimiStatus } from './kimi.js';
 
 const OK = '[OK]  ';
 const WARN = '[WARN]';
@@ -106,6 +107,34 @@ async function vibeDecisionsCheck() {
   };
 }
 
+async function harnessSkillCheck() {
+  const skill = join(homedir(), '.claude', 'skills', 'harness', 'SKILL.md');
+  if (await pathExists(skill)) {
+    return { status: OK, msg: 'harness skill installed globally (self-extension)' };
+  }
+  return {
+    status: WARN,
+    msg: 'harness skill not installed — run `claudenv install --force`',
+  };
+}
+
+async function kimiBridgeCheck() {
+  const k = kimiStatus();
+  if (!k.installed) {
+    return {
+      status: WARN,
+      msg: 'kimi-webbridge not installed — optional browser automation (`claudenv skills add kimi-webbridge`)',
+    };
+  }
+  if (k.running && k.extensionConnected) {
+    return { status: OK, msg: 'kimi-webbridge healthy (daemon + extension connected)' };
+  }
+  if (k.running) {
+    return { status: WARN, msg: 'kimi-webbridge daemon up, browser extension not connected' };
+  }
+  return { status: WARN, msg: 'kimi-webbridge installed, daemon stopped (`kimi-webbridge start`)' };
+}
+
 async function projectHooksCheck() {
   const settingsPath = join(process.cwd(), '.claude', 'settings.json');
   if (!(await pathExists(settingsPath))) {
@@ -184,6 +213,8 @@ export async function runDoctor() {
     await memoriesLayoutCheck(),
     await indexSizeCheck(),
     await vibeDecisionsCheck(),
+    await harnessSkillCheck(),
+    await kimiBridgeCheck(),
     await projectHooksCheck(),
     await pythonModuleCheck(),
     await countDecisionsCheck(),
