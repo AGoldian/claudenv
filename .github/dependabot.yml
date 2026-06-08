@@ -1,0 +1,19 @@
+version: 2
+
+# Automated dependency + action update PRs. Low-noise weekly cadence.
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: pip
+    directory: "/python"
+    schedule:
+      interval: weekly
